@@ -1,12 +1,7 @@
-
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export NCCL_DEBUG=INFO
 export WANDB_NAME=opt-test
-export WANDB_DISABLED=0
-export WANDB_ENTITY=pipeline-activation-compression
-
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
