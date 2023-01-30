@@ -39,6 +39,17 @@ After that, run the corresponding process on each GPU node.
 
 ## Arguments
 
+Enviroment vars that should be set:
+```bash
+export GLOO_SOCKET_IFNAME=lo # the correct interface
+export NCCL_SOCKET_IFNAME=lo # the correct interface
+export WANDB_NAME=opt-test # wandb run name
+
+export RANDOMP_RATIO=0.1   # CocktailSGD: Random sparsity ratio
+export TOPK_RATIO=0.2      # CocktailSGD: TopK sparsity ratio
+export QUANT_BITS=4        # CocktailSGD: Quantization bits
+```
+
 The following arguments should be carefully set:
 - `--model-name`: The path of model ckpt sharded by layers.
 - `--tokenizer-name`: Usually the same to `--model-name`. You can also use HF's model name.
