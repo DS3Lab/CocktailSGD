@@ -16,7 +16,10 @@ pip install wandb
 pip install bitsandbytes # optional, to use 8bit-adam
 ```
 
-As we use wandb to manage experiments, one should also configure `wandb` before running the code.
+As we use wandb to manage experiments, one should also configure `wandb` before running the code
+```
+wandb login
+```
 
 ## Download Pretrained Models
 
