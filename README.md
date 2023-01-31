@@ -82,7 +82,5 @@ The following arguments can be tuned / changed:
 
 The following arguments usually do not change:
 - `--fp16`: Flag to enable FP16 mixed precision training. Should always adding it for the current impl.
-- `--dp-backend`: {gloo, nccl}
-- `--dp-mode`: {allreduce, cocktail_sgd}. `cocktail_sgd` should always set `--dp-backend gloo`
 - `--pp-mode`: always `gpipe`
 - `--profiling`: {no-profiling, tidy_profiling}. `tidy_profiling` will generate profile jsons.
