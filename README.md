@@ -13,6 +13,7 @@ pip install datasets
 pip install netifaces
 pip install zstandard
 pip install wandb
+pip install bitsandbytes # optional, to use 8bit-adam
 ```
 
 As we use wandb to manage experiments, one should also configure `wandb` before running the code.
@@ -63,7 +64,7 @@ The following arguments should be carefully set:
 - `--net-interface`: Network interface. Should be consistent with `GLOO_SOCKET_IFNAME` and `NCCL_SOCKET_IFNAME`.
 
 The following arguments can be tuned / changed:
-- `--optimizer`: Optimizer type. {adam, 8bit-adam} (8bit-adam requires `bitsandbytes`)
+- `--optimizer`: Optimizer type. {adam, 8bit-adam} (8bit-adam requires `pip install bitsandbytes`)
 - `--load-pretrained-model`: Whether to load model weights. Usually `true`.
 - `--task-name`: The task name or the path of a `jsonl` file. For multi-task training separate task names by `,`. 
    There is an optional sampling weight after each task name, separated by `:` (default is 1.0). Sampling weights will be normalized. 
