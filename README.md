@@ -42,6 +42,14 @@ The script will launch 8 processes with a data parallel degree of 4 and a pipeli
 In case of geo-distributed training, please first make sure the network interface is correctly set and the master (rank 0 worker) IP and port are accesible by all the workers.
 After that, run the corresponding process on each GPU node.
 
+```shell
+# set enviroment vars
+...
+
+# run on each GPU node
+python dist_lm_train.py ... --cuda-id 0 --rank ${GLOBAL_RANK}
+```
+
 
 ## Arguments
 
