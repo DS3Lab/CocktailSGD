@@ -1,6 +1,8 @@
 # CocktailSGD
 
-## Setup:
+## Quick Start
+
+### (1) Setup
 
 - Install PyTorch env: 
 
@@ -21,7 +23,7 @@ As we use wandb to manage experiments, one should also configure `wandb` before 
 wandb login
 ```
 
-## Download Pretrained Models
+### (2) Download Pretrained Models
 
 We provide pretrained model checkpoints that are sharded by layers:
 - [OPT-1.3B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/opt-1.3b-new.zip)
@@ -30,9 +32,9 @@ We provide pretrained model checkpoints that are sharded by layers:
 
 Please download and unzip them. The path of unzipped model will be passed to `--model-name` and `--tokenizer-name` for fine-tuning.
 
-## Run Fine-Tuning
+### (3) Run Fine-Tuning
 
-### An Example of OPT-1.3B
+#### An Example of OPT-1.3B
 
 Please refer to `run_example.sh`, which shows an example to fine-tune OPT-1.3B on mmlu-cot data.
 The script will launch 8 processes with a data parallel degree of 4 and a pipeline parallel degree of 2.
