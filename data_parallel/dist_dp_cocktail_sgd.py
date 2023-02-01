@@ -39,9 +39,6 @@ class CocktailSGDDP:
         self.sync_gradients_start_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
         self.sync_gradients_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
         self.optimizer_step_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
-        
-        self.mmt_start_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
-        self.mmt_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
 
         self.module = module
         assert optimizer is not None
@@ -75,11 +72,6 @@ class CocktailSGDDP:
             self.gather_end_event = torch.cuda.Event(enable_timing=True, blocking=False)
             self.sync_end_event = torch.cuda.Event(enable_timing=True, blocking=False)
             
-            self.worker_compress_start_event = torch.cuda.Event(enable_timing=True, blocking=False)
-            self.server_compress_start_event = torch.cuda.Event(enable_timing=True, blocking=False)
-            self.worker_compress_end_event = torch.cuda.Event(enable_timing=True, blocking=False)
-            self.server_compress_end_event = torch.cuda.Event(enable_timing=True, blocking=False)
-            
         self.dp_state_dict = {}
 
     def _compute_total_para_num(self):
@@ -102,48 +94,14 @@ class CocktailSGDDP:
         if self.enable_tidy_profiling:
             self.torch_optim_comp_stream.record_event(self.optimizer_step_start_event)
             
-    def allreduce_parameters(self):
-        self._local_parameters_backup = [
-            p.data.clone() for p in self.module.parameters()
-        ]
-        torch.cuda.synchronize()
-        self.dp_comm.barrier()
-        with torch.cuda.stream(self.dp_comm_stream):
-            cupy_dp_stream = cupy.cuda.ExternalStream(self.dp_comm_stream.cuda_stream)
-            # self.dp_comm_stream.wait_event(self.backward_ready_event)
-            for name, para in self.module.named_parameters():
-                # self.profile_mark_allreduce_start(name)
-                para.data /= self.dp_group_size
-                self.dp_comm.all_reduce(para.data, stream=cupy_dp_stream)
-                # self.profile_mark_allreduce_end(name)
-            # self.dp_comm_stream.record_event(self.allreduce_grad_ready_event)
-        torch.cuda.synchronize()
-        self.dp_comm.barrier()
-
-    def rollback_parameters(self):
-        if not hasattr(self, '_local_parameters_backup'):
-            return
-        
-        for p, p_local in zip(self.module.parameters(), self._local_parameters_backup):
-            p.data[:] = p_local.data
-            
-        del self._local_parameters_backup
-            
     def _allreduce_gradients(self):
         with torch.cuda.stream(self.dp_comm_stream):
             cupy_dp_stream = cupy.cuda.ExternalStream(self.dp_comm_stream.cuda_stream)
             self.dp_comm_stream.wait_event(self.backward_ready_event)
-            if self.flatten:
-                # self.profile_mark_allreduce_start()
-                self.dp_comm.all_reduce(self.flatten_para.grad, stream=cupy_dp_stream)
-                self.profile_mark_allreduce_end()
-            else:
-                for name, para in self.module.named_parameters():
-                    if para.grad is None:
-                        continue
-                    # self.profile_mark_allreduce_start(name)
-                    self.dp_comm.all_reduce(para.grad, stream=cupy_dp_stream)
-                    # self.profile_mark_allreduce_end(name)
+            for name, para in self.module.named_parameters():
+                if para.grad is None:
+                    continue
+                self.dp_comm.all_reduce(para.grad, stream=cupy_dp_stream)
             self.dp_comm_stream.record_event(self.sync_gradients_ready_event)
             
     def _compress(self, x):
@@ -189,7 +147,6 @@ class CocktailSGDDP:
             
                 self.dp_comm_stream.record_event(self.sync_gradients_start_event)
                 
-                # self.pp_comm.barrier()
                 self.dp_comm.barrier()
                 
                 name = 'model'
@@ -228,7 +185,6 @@ class CocktailSGDDP:
                     # print('server error shape:', server_error.shape)
                     dp_state_dict[name] = {
                         "comm_mask_list": comm_mask_list,
-                        # "comm_data_list": comm_data_list,
                         "global_para": global_para,
                         "server_error": server_error,
                     }
@@ -262,7 +218,6 @@ class CocktailSGDDP:
                     _data_compressed = self._decompress(comm_data_compressed_list[i], comm_data_meta_list[i])
                     para.data[i*chunk_size:(i+1)*chunk_size][comm_mask_list[i]] -= _data_compressed
                     del _data_compressed
-
                     
                 _group_calls = []
                 for i in range(self.dp_group_size):
@@ -281,8 +236,7 @@ class CocktailSGDDP:
                                 to_recv, src=i, stream=cupy_dp_stream)
                             _group_calls.append(call)
                 for call in _group_calls:
-                    call.wait()
-                    
+                    call.wait()  
 
                 server_data = self._decompress([z.to(para.device) for z in comm_buffer_list[0]], comm_data_meta_list[0]) / len(comm_buffer_list)
                 for i in range(1, self.dp_group_size):
@@ -469,7 +423,6 @@ class CocktailSGDDP:
             self.torch_optim_comp_stream.wait_event(self.sync_gradients_ready_event)
             self.torch_optim_comp_stream.wait_event(self.backward_ready_event)
             self.profile_mark_optimizer_step_start()
-            # self._copy_to_model()
             self.optimizer.step()
             print('done optim')
             self.torch_optim_comp_stream.record_event(self.optimizer_step_ready_event)
