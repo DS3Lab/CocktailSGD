@@ -459,16 +459,16 @@ class CocktailSGDDP:
                 
 
     def pre_optimizer_step(self):
-        if flag.FLAG_DISABLE_COMPRESSION:
-            self._allreduce_gradients()
-        else:
-            # self._partial_sync()
+        if not flag.FLAG_DISABLE_COMPRESSION:
             self.t = threading.Thread(target=self._partial_sync)
             self.t.start()
             
     def optimizer_step(self):
         
-        self.t.join()
+        if flag.FLAG_DISABLE_COMPRESSION:
+            self._allreduce_gradients()
+        else:
+            self.t.join()
             
         with torch.cuda.stream(self.torch_optim_comp_stream):
             self.torch_optim_comp_stream.wait_event(self.sync_gradients_ready_event)
