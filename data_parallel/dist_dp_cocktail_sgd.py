@@ -14,9 +14,11 @@ import os
 
 quantization_bits = int(os.environ.get('QUANT_BITS', 8))
 quantization_bucket_size = int(os.environ.get('QUANT_BUCKET_SIZE', 128))
+quantization_stochastic = int(os.environ.get('QUANT_STOCHASTIC', 0))
+quantization_minimum_stochastic_distance = float(os.environ.get('QUANT_MIN_STOCHASTIC_DISTANCE', 0.2))
 top_k_ratio = float(os.environ.get('TOPK_RATIO', 0.5))
 random_p_ratio = float(os.environ.get('RANDOMP_RATIO', 0.5))
-sync_steps = int(1 / random_p_ratio)
+random_method = os.environ.get('RANDOM_METHOD', 'random_rolling')
 
 import threading
 
@@ -122,7 +124,9 @@ class CocktailSGDDP:
                     
                 values, masks, indices = compress_topk(x, k, return_indices=True)
 
-                values_q, scales_q = compress_flexible_nbits_by_bucket(values, bits=quantization_bits, scale_method='max', bucket_size=quantization_bucket_size)
+                values_q, scales_q = compress_flexible_nbits_by_bucket(
+                    values, bits=quantization_bits, scale_method='max', bucket_size=quantization_bucket_size, 
+                    stochastic=quantization_stochastic, minimum_stochastic_distance=quantization_minimum_stochastic_distance)
                 
                 return (values_q, scales_q, masks), (dtype, shape, values.shape)
     
@@ -134,9 +138,80 @@ class CocktailSGDDP:
         values = decompress_flexible_nbits_by_bucket(values_q, scales_q, bits=quantization_bits, original_shape=values_shape, bucket_size=quantization_bucket_size)
                     
         x = decompress_topk(values, masks, x_shape)
-        x = x.to(x_dtype)
+        x = x.view(x_shape).to(x_dtype)
         
         return x
+    
+    def _update_comm_mask(self, para, comm_mask=None):
+        
+        if random_method == 'random_rolling':
+            
+            sync_every_n_elements = int(1 / random_p_ratio)
+            
+            if comm_mask is None:
+                para_shape = list(para.shape)
+                assert para_shape[0] == para_shape[0] // self.dp_group_size * self.dp_group_size
+                para_shape[0] = para_shape[0] // self.dp_group_size
+                comm_mask = torch.zeros(para_shape, dtype=torch.bool, device=para.device)
+                comm_mask.view(-1)[::sync_every_n_elements] = True
+                n_potisive = comm_mask.sum().item() // quantization_bucket_size * quantization_bucket_size
+                if n_potisive != 0:
+                    comm_mask.view(-1)[comm_mask.view(-1).cumsum(-1) > n_potisive] = False
+                    assert comm_mask.sum().item() == n_potisive
+                else:
+                    comm_mask[:] = True
+                print('comm_mask:', comm_mask.sum().item(), comm_mask.shape)
+            else:
+                comm_mask = comm_mask.roll(1)
+            
+        elif random_method == 'random_w_replacement':
+            
+            seed = torch.randint(10000, [1])
+            self.dp_comm.broadcast(seed, 0)
+            torch.manual_seed(seed.item())
+            
+            para_shape = list(para.shape)
+            assert len(para_shape) == 1
+            assert para_shape[0] == para_shape[0] // self.dp_group_size * self.dp_group_size
+            para_shape[0] = para_shape[0] // self.dp_group_size
+            
+            n_sample = int(random_p_ratio * para_shape[0])
+            n_sample = n_sample // 8 * 8
+            n_sample = n_sample // quantization_bucket_size * quantization_bucket_size
+            comm_mask = torch.randint(para_shape[0], (n_sample,), device=para.device)
+            
+        elif random_method == 'random_wo_replacement':
+            
+            if comm_mask is None or ((self._cursor+1) * self._n_sample >= len(self._comm_indices)):
+                
+                seed = torch.randint(10000, [1])
+                self.dp_comm.broadcast(seed, 0)
+                torch.manual_seed(seed.item())
+                
+                para_shape = list(para.shape)
+                assert len(para_shape) == 1
+                assert para_shape[0] == para_shape[0] // self.dp_group_size * self.dp_group_size
+                para_shape[0] = para_shape[0] // self.dp_group_size
+                
+                n_sample = int(random_p_ratio * para_shape[0])
+                n_sample = n_sample // 8 * 8
+                n_sample = n_sample // quantization_bucket_size * quantization_bucket_size
+                self._n_sample = n_sample
+                self._cursor = 0
+                self._comm_indices = torch.randperm(para_shape[0], device=para.device)
+                
+            comm_mask = self._comm_indices[self._cursor * self._n_sample: (self._cursor+1) * self._n_sample]
+            self._cursor += 1
+        
+        else:
+            
+            raise Exception(f"""Unknown random method '{random_method}'""")
+                
+                
+        return comm_mask
+        
+        
+        
             
     def _partial_sync(self):
         
@@ -160,18 +235,7 @@ class CocktailSGDDP:
                     comm_mask_list = []
                     comm_data_list = []
                     for i in range(self.dp_group_size):
-                        para_shape = list(para.shape)
-                        assert para_shape[0] == para_shape[0] // self.dp_group_size * self.dp_group_size
-                        para_shape[0] = para_shape[0] // self.dp_group_size
-                        comm_mask = torch.zeros(para_shape, dtype=torch.bool, device=para.device)
-                        comm_mask.view(-1)[::sync_steps] = True
-                        n_potisive = comm_mask.sum().item() // quantization_bucket_size * quantization_bucket_size
-                        if n_potisive != 0:
-                            comm_mask.view(-1)[comm_mask.view(-1).cumsum(-1) > n_potisive] = False
-                            assert comm_mask.sum().item() == n_potisive
-                        else:
-                            comm_mask[:] = True
-                        print('comm_mask:', comm_mask.sum().item(), comm_mask.shape)
+                        comm_mask = self._update_comm_mask(para)
                         comm_mask_list.append(comm_mask)
 
                     # global para
@@ -179,10 +243,9 @@ class CocktailSGDDP:
 
                     # server error
                     server_error = torch.zeros(
-                        comm_mask_list[self.dp_rank].shape, dtype=torch.float16, device=para.device,
+                        para.size(0) // self.dp_group_size, dtype=torch.float16, device=para.device,
                     )
 
-                    # print('server error shape:', server_error.shape)
                     dp_state_dict[name] = {
                         "comm_mask_list": comm_mask_list,
                         "global_para": global_para,
@@ -190,7 +253,7 @@ class CocktailSGDDP:
                     }
                 else:
                     for i in range(self.dp_group_size):
-                        dp_state_dict[name]['comm_mask_list'][i] = dp_state_dict[name]['comm_mask_list'][i].roll(1)
+                        dp_state_dict[name]['comm_mask_list'][i] = self._update_comm_mask(para, dp_state_dict[name]['comm_mask_list'][i])
 
                 comm_mask_list = dp_state_dict[name]["comm_mask_list"]
                 comm_data_list = comm_data_list = [None for _ in comm_mask_list]
@@ -210,7 +273,7 @@ class CocktailSGDDP:
                     comm_data_compressed_list.append(data)
                     comm_data_meta_list.append(meta_data)
                     del x
-                del comm_data_list
+                # del comm_data_list
                 comm_buffer_list = [[torch.zeros_like(x, device='cpu') for x in x_tuple] for x_tuple in comm_data_compressed_list]
                 
                 # revert
@@ -222,7 +285,6 @@ class CocktailSGDDP:
                 _group_calls = []
                 for i in range(self.dp_group_size):
                     for j, to_send in enumerate(comm_data_compressed_list[i]):
-                        # print(f"send from {self.dp_rank} to {i}")
                         if i != self.dp_rank:
                             call = self.dp_comm.isend(
                                 to_send, dst=i, stream=cupy_dp_stream)
@@ -230,7 +292,6 @@ class CocktailSGDDP:
                         else:
                             comm_buffer_list[i][j][:] = to_send.cpu()
                     for to_recv in comm_buffer_list[i]:
-                        # print(f"recv from {i} to {self.dp_rank}")
                         if i != self.dp_rank:
                             call = self.dp_comm.irecv(
                                 to_recv, src=i, stream=cupy_dp_stream)
@@ -293,18 +354,7 @@ class CocktailSGDDP:
                             comm_mask_list = []
                             comm_data_list = []
                             for i in range(self.dp_group_size):
-                                para_shape = list(para.shape)
-                                assert para_shape[0] == para_shape[0] // self.dp_group_size * self.dp_group_size
-                                para_shape[0] = para_shape[0] // self.dp_group_size
-                                comm_mask = torch.zeros(para_shape, dtype=torch.bool, device='cpu')
-                                comm_mask.view(-1)[::sync_steps] = True
-                                n_potisive = comm_mask.sum().item() // quantization_bucket_size * quantization_bucket_size
-                                if n_potisive != 0:
-                                    comm_mask.view(-1)[comm_mask.view(-1).cumsum(-1) > n_potisive] = False
-                                    assert comm_mask.sum().item() == n_potisive
-                                else:
-                                    comm_mask[:] = True
-                                # print('comm_mask:', comm_mask.sum().item(), comm_mask.shape)
+                                comm_mask = self._update_comm_mask(para)
                                 comm_mask_list.append(comm_mask)
 
                             # global para
@@ -313,7 +363,7 @@ class CocktailSGDDP:
                             # server error
                             # server_error = torch.zeros_like(global_para.chunk(self.dp_group_size, 0)[self.dp_rank])
                             server_error = torch.zeros(
-                                comm_mask_list[self.dp_rank].shape, dtype=torch.float16, device='cpu',
+                                para.size(0) // self.dp_group_size, dtype=torch.float16, device='cpu',
                             )
 
                             # print('server error shape:', server_error.shape)
@@ -324,7 +374,7 @@ class CocktailSGDDP:
                             }
                         else:
                             for i in range(self.dp_group_size):
-                                dp_state_dict[name]['comm_mask_list'][i] = dp_state_dict[name]['comm_mask_list'][i].roll(1)
+                                dp_state_dict[name]['comm_mask_list'][i] = self._update_comm_mask(para, dp_state_dict[name]['comm_mask_list'][i])
 
                         comm_mask_list = dp_state_dict[name]["comm_mask_list"]
                         comm_data_list = [None for _ in comm_mask_list]
@@ -348,6 +398,7 @@ class CocktailSGDDP:
                         # revert
                         for i in range(self.dp_group_size):
                             _data_compressed = self._decompress(comm_data_compressed_list[i], comm_data_meta_list[i])
+                            print(comm_data_list[i].shape, _data_compressed.shape, comm_mask_list[i].shape)
                             para.data[i*chunk_size:(i+1)*chunk_size][comm_mask_list[i]] -= _data_compressed
                             del _data_compressed
 

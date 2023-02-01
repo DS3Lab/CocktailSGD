@@ -20,7 +20,8 @@ def _rounding(x, stochastic=False, minimum_stochastic_distance=0.2):
         return x.round()
 
 
-def _compress_nbits(x, bits, scale_method='max', scale_dims=(0,1)):
+def _compress_nbits(x, bits, scale_method='max', scale_dims=(0,1), 
+                    stochastic=False, minimum_stochastic_distance=0.2):
     
     fbits = bits - 1
     
@@ -40,7 +41,7 @@ def _compress_nbits(x, bits, scale_method='max', scale_dims=(0,1)):
     clip_min = -(1<<fbits)
     clip_max = (1<<fbits)-1
 
-    x = _rounding(x)
+    x = _rounding(x, stochastic=stochastic, minimum_stochastic_distance=minimum_stochastic_distance)
     x = x.clip(clip_min, clip_max)
     
     x = x - clip_min
@@ -173,7 +174,8 @@ def decompress_nbits(x, scale, bits):
 
 
 
-def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512):
+def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512,
+                              stochastic=False, minimum_stochastic_distance=0.2):
     
     if bits == 1:
         
@@ -208,7 +210,7 @@ def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512):
     clip_min = -(1<<fbits)
     clip_max = (1<<fbits)-1
 
-    x = _rounding(x)
+    x = _rounding(x, stochastic=stochastic, minimum_stochastic_distance=minimum_stochastic_distance)
     x = x.clip(clip_min, clip_max)
     
     x = x - clip_min
@@ -217,14 +219,17 @@ def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512):
     return x, scale
 
 
-def compress_flexible_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512):
+def compress_flexible_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512,
+                                      stochastic=False, minimum_stochastic_distance=0.2):
     # support any bits
     # CUDA only
     
     if bucket_size > x.numel():
         bucket_size = x.numel()
     
-    x, scale = _compress_nbits_by_bucket(x, bits=bits, scale_method=scale_method, bucket_size=bucket_size)
+    x, scale = _compress_nbits_by_bucket(
+        x, bits=bits, scale_method=scale_method, bucket_size=bucket_size,
+        stochastic=stochastic, minimum_stochastic_distance=minimum_stochastic_distance)
     
     x = pack_low_bit_tensor(x, bits)
     
