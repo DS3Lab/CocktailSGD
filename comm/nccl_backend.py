@@ -216,21 +216,4 @@ class NCCLCommunicator:
             self.comm.send(buffer[0].data_ptr(), chunk_size, t_type, i, stream.ptr)
             self.comm.recv(tensor.data_ptr()+i*chunk_size*element_size, chunk_size, t_type, i, stream.ptr)
         cupy.cuda.nccl.groupEnd()
-        
 
-def default_init(args):
-    import datetime
-    dist.init_process_group(backend='gloo', timeout=datetime.timedelta(seconds=30*60), init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-
-"""
-def init_comm(args):
-    if args.dist_backend == 'cupy_nccl':
-        comm = NCCLCommunicator(rank=args.rank, intra_gpu_rank=args.cuda_id,
-                                world_size=args.world_size, master_ip=args.dist_url)
-    else:
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                rank=args.rank, world_size=args.world_size)
-        comm = dist
-    dist.barrier()
-    return comm
-"""

@@ -111,22 +111,3 @@ class TorchCommunicator:
                    stream=None):
         dist.all_gather(output_tensor_list, tensor, group=self.process_group)
         
-    
-
-def default_init(args):
-    if hasattr(args, 'world_size'):
-        dist.init_process_group(backend='gloo', init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-    else:
-        assert hasattr(args, 'pipeline_group_size')
-        dist.init_process_group(backend='nccl', init_method=args.dist_url,
-                                world_size=args.pipeline_group_size, rank=args.rank)
-
-
-def init_with_coordinator(args, prime_ip, rank, port=9999):
-    if hasattr(args, 'world_size'):
-        dist.init_process_group(backend='gloo', init_method='tcp://'+prime_ip+f':{port}',
-                                world_size=args.world_size, rank=rank)
-    else:
-        assert hasattr(args, 'pipeline_group_size')
-        dist.init_process_group(backend='gloo', init_method='tcp://' + prime_ip + f':{port}',
-                                world_size=args.pipeline_group_size, rank=rank)

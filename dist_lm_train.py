@@ -26,7 +26,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
     
     use_dp = (args.world_size != args.pipeline_group_size)
     if use_dp:
-        dp_comm = get_data_parallel_comm()
+        # dp_comm = get_data_parallel_comm()
         dp_rank = get_data_parallel_rank()
         dp_size = get_data_parallel_world_size()
     else:
@@ -50,7 +50,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
                 continue
                 
             if use_dp:
-                dp_comm.broadcast(stop_flag, 0)
+                get_data_parallel_comm().broadcast(stop_flag, 0)
             pp_comm.broadcast(stop_flag, 0)
             
             if stop_flag.item() == 1:
@@ -62,7 +62,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             
             if use_dp:
                 for j in range(1, dp_size):
-                    dp_comm.send(
+                    get_data_parallel_comm().send(
                         input_ids_list[j], j,
                     )
                 
@@ -91,12 +91,12 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
         
         while True:
             
-            dp_comm.broadcast(stop_flag, 0)
+            get_data_parallel_comm().broadcast(stop_flag, 0)
             pp_comm.broadcast(stop_flag, 0)
             if stop_flag.item() == 1:
                 break
                 
-            dp_comm.recv(
+            get_data_parallel_comm().recv(
                 input_ids, 0,
             )
             pp_comm.broadcast(input_ids, 0)

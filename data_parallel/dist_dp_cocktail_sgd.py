@@ -26,15 +26,18 @@ import threading
 class CocktailSGDDP:
     def __init__(self, args, device, module: torch.nn.Module, optimizer: torch.optim.Optimizer = None, flatten=False):
         # assert not flatten
+        self.args = args
         self.dp_bits = args.dp_bits
         self.flatten = flatten
         self.global_rank = args.rank
         self.dp_group_size = args.data_group_size
         self.enable_tidy_profiling = (args.profiling == 'tidy_profiling')
-        self.dp_comm = get_data_parallel_comm()
+        # self.dp_comm = get_data_parallel_comm()
         self.dp_rank = get_data_parallel_rank()
         self.pp_comm = get_pipeline_parallel_comm()
         self.pp_rank = get_pipeline_parallel_rank()
+        self.pp_group_size = get_pipeline_parallel_world_size()
+        self.device = device
         self.dp_comm_stream = torch.cuda.Stream(device=device, priority=-1)
         self.torch_optim_comp_stream = torch.cuda.default_stream(device=device)
         self.backward_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
@@ -42,6 +45,8 @@ class CocktailSGDDP:
         self.sync_gradients_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
         self.optimizer_step_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
 
+        self.flag_dp_exception = 0
+        
         self.module = module
         assert optimizer is not None
         self.optimizer = optimizer
@@ -75,6 +80,10 @@ class CocktailSGDDP:
             self.sync_end_event = torch.cuda.Event(enable_timing=True, blocking=False)
             
         self.dp_state_dict = {}
+        
+    @property
+    def dp_comm(self):
+        return get_data_parallel_comm()
 
     def _compute_total_para_num(self):
         total_count = 0
@@ -209,7 +218,6 @@ class CocktailSGDDP:
                 
                 
         return comm_mask
-        
         
         
             
@@ -457,11 +465,26 @@ class CocktailSGDDP:
                             
                 self.dp_comm_stream.record_event(self.sync_gradients_ready_event)
                 
+    def _try_partial_sync(self):
+        try:
+            self._partial_sync()
+        except:
+            self.flag_dp_exception = 1
 
     def pre_optimizer_step(self):
         if not flag.FLAG_DISABLE_COMPRESSION:
-            self.t = threading.Thread(target=self._partial_sync)
+            self.t = threading.Thread(target=self._try_partial_sync)
             self.t.start()
+            
+    def reinit_dp_comm_if_wrong(self):
+        
+        buffers = [torch.zeros(1).long().to(self.device) for _ in range(self.pp_group_size)]
+        self.pp_comm.all_gather(torch.tensor(self.flag_dp_exception).long().to(self.device), buffers)
+        self.flag_dp_exception = max([s.item() for s in buffers])
+        
+        if self.flag_dp_exception:
+            reinit_dp_communicator(self.args)
+            self.flag_dp_exception = 0
             
     def optimizer_step(self):
         
@@ -469,6 +492,8 @@ class CocktailSGDDP:
             self._allreduce_gradients()
         else:
             self.t.join()
+            
+        self.reinit_dp_comm_if_wrong()
             
         with torch.cuda.stream(self.torch_optim_comp_stream):
             self.torch_optim_comp_stream.wait_event(self.sync_gradients_ready_event)
