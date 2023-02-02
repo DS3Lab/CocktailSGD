@@ -30,7 +30,8 @@ We provide pretrained model checkpoints that are sharded by layers:
 - [GPT-J-6B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/gpt-j-6B-new.zip)
 - [GPT-NeoX-20B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/gpt-neox-20b-new.zip)
 
-Please download and unzip them. The path of unzipped model will be passed to `--model-name` and `--tokenizer-name` for fine-tuning.
+Please download and unzip the above ckpts to fine-tune them. 
+The path of unzipped model should be passed to `--model-name` and `--tokenizer-name` for fine-tuning.
 
 ### (3) Run Fine-Tuning
 
