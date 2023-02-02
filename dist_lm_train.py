@@ -73,7 +73,8 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             # pp_comm.broadcast(prefix_masks, 0)
             
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
-            current_iter_time = pipe.sgd_iter(input_ids, None)
+            labels = input_ids.clone()
+            current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
             
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
@@ -101,7 +102,8 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             pp_comm.broadcast(input_ids, 0)
             
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
-            current_iter_time = pipe.sgd_iter(input_ids, None)
+            labels = input_ids.clone()
+            current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
             
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:

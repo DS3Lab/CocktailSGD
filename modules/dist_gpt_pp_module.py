@@ -71,6 +71,25 @@ class GPTStageBase(nn.Module):
                 torch.load(f'{self.model_name}/pytorch_{layer_idx}.pt')
             )
         return layer
+    
+
+class GPTStageFull(GPTStageBase):
+    def __init__(self, args, config, device):
+        super(GPTStageFull, self).__init__(args, config)
+        self.device = device
+        module_list = [self._create_first_layer()]
+        for layer_idx in range(self._layer_begin, self._layer_end):
+            module_list.append(self._create_transformer_layer(layer_idx=layer_idx))
+        if hasattr(args, 'skip_lm_head') and args.skip_lm_head:
+            pass
+        else:
+            module_list.append(self._create_last_layer())
+        self.model = nn.Sequential(*module_list).to(device)
+
+    def forward(self, x, **kargs):
+        for module in self.model:
+            x = module(x, **kargs)
+        return x
 
 
 class GPTStageFirst(GPTStageBase):
