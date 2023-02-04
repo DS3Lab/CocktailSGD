@@ -38,6 +38,18 @@ pip install flash-attn
 
 In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
 
+We now integrate flash attention to OPT models. Please set `--model-type flash_opt` to use it .
+
+### (Optional) Install Nvidia Apex
+
+```
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+```
+
+In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
+
 
 ### (2) Download Pretrained Models
 
