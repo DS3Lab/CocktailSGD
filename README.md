@@ -15,13 +15,29 @@ pip install datasets
 pip install netifaces
 pip install zstandard
 pip install wandb
-pip install bitsandbytes # optional, to use 8bit-adam
 ```
 
 As we use wandb to manage experiments, one should also configure `wandb` before running the code
-```
+```shell
 wandb login
 ```
+
+### (Optional) Install bitsandbytes for 8bit Adam
+
+```shell
+pip install bitsandbytes # optional, to use 8bit-adam
+```
+
+### (Optional) Install FlashAttention
+
+https://github.com/HazyResearch/flash-attention
+
+```shell
+pip install flash-attn
+```
+
+In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
+
 
 ### (2) Download Pretrained Models
 
