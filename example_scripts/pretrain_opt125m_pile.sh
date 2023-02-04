@@ -27,7 +27,7 @@ ARGS="--model-name ./empty_model_configs/opt-125m \
 --evaluation-steps 10 \
 --evaluation-data pile \
 --evaluation-num-batch 10 \
---lr 1e-3 --seq-length 2048 --batch-size 16 --micro-batch-size 1 --gradient-accumulate-step 1 \
+--lr 1e-3 --seq-length 2048 --batch-size 16 --micro-batch-size 8 --gradient-accumulate-step 1 \
 --dist-url tcp://127.0.0.1:7033 \
 --world-size 4 --pipeline-group-size 1 --data-group-size 4 \
 --job-id 0 --net-interface ${netif} \
