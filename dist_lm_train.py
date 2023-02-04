@@ -32,8 +32,8 @@ def test_loop(args, pipe, device, test_data_loader):
         
         def _lm_pred_func(x, y):
             loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
-            logits = x[:, :-1, :].contiguous().float()
-            labels = y[:, 1:].contiguous()
+            logits = x[:, 1024:][:, :-1, :].contiguous().float()
+            labels = y[:, 1024:][:, 1:].contiguous()
             loss = loss_fct(logits.transpose(-1, -2), labels).mean(1).detach().cpu()
             return loss
         
@@ -127,7 +127,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             labels = input_ids.clone()
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
             
-            if pipe.global_step % args.evaluation_steps == 0:
+            if args.evaluation_steps > 0 and pipe.global_step % args.evaluation_steps == 0:
                 test_loop(args, pipe, device, test_data_loader)
             
             if pipe.global_step % args.checkpoint_steps == 0:
@@ -159,7 +159,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             labels = input_ids.clone()
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
             
-            if pipe.global_step % args.evaluation_steps == 0:
+            if args.evaluation_steps > 0 and pipe.global_step % args.evaluation_steps == 0:
                 test_loop(args, pipe, device, test_data_loader)
                 
             if pipe.global_step % args.checkpoint_steps == 0:
@@ -184,7 +184,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func) # lm loss func
             
-            if pipe.global_step % args.evaluation_steps == 0:
+            if args.evaluation_steps > 0 and pipe.global_step % args.evaluation_steps == 0:
                 test_loop(args, pipe, device, test_data_loader)
                 
             if pipe.global_step % args.checkpoint_steps == 0:
@@ -204,7 +204,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
             current_iter_time = pipe.sgd_iter(None, None)
             
-            if pipe.global_step % args.evaluation_steps == 0:
+            if args.evaluation_steps > 0 and pipe.global_step % args.evaluation_steps == 0:
                 test_loop(args, pipe, device, test_data_loader)
                 
             if pipe.global_step % args.checkpoint_steps == 0:
@@ -312,8 +312,10 @@ def main():
     else:
         train_data_loader = None
         
-    if args.evaluation_data is not None:
+    if args.evaluation_data is not None and dp_rank == 0:
         test_data_loader = get_eval_data_loader(args, tokenizer)
+    else:
+        test_data_loader = None
         
     if args.total_steps is None:
         args.total_steps = len(train_data_loader)

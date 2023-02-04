@@ -430,8 +430,8 @@ class GpipeAsync:
             assert(target is not None)
             target_as_micro_batches = torch.chunk(
                 target, self.micro_batch_num, dim=0)
-        else:
-            assert(target is None)
+        # else:
+        #     assert(target is None)
 
         if self.pp_rank == self.pipeline_group_size - 1:
             tr_loss = []
@@ -754,7 +754,7 @@ class GpipeAsync:
                    output_=None, 
                    aux_input_data=None, 
                    pred_func=None):
-        self.comm.barrier()
+        # self.comm.barrier()
         torch.cuda.synchronize()
         with torch.no_grad():
             outputs = self.infer_stage(input_, 
@@ -762,7 +762,8 @@ class GpipeAsync:
                                        labels=target, pred_func=pred_func)
             if output_ is not None:
                 outputs = torch.cat(outputs, 0).mean().item()
+                print(outputs)
                 output_.append(outputs)
         torch.cuda.synchronize()
-        self.comm.barrier()
+        # self.comm.barrier()
 

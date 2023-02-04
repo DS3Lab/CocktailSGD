@@ -81,7 +81,7 @@ def name_to_dataset(task, tokenizer, args):
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'pile':
             from .pile import StreamDataset
-            data = load_dataset('the_pile', split="train", streaming=True).shuffle(buffer_size=1000_000, seed=args.seed).with_format("torch")
+            data = load_dataset('the_pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
             # data = load_dataset('the_pile', split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'cot':
@@ -92,8 +92,22 @@ def name_to_dataset(task, tokenizer, args):
                 from .p3 import StreamDataset
             else:
                 from .pile import StreamDataset
-            data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed)
+            data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
+        
+    return dataset
+
+def name_to_dataset_eval(task, tokenizer, args):
+    
+    if task != '':
+        if task == 'pile':
+            from .pile import StreamDataset
+            data = load_dataset('the_pile', split="validation", streaming=True)
+            dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
+        else:
+            from .pile import StreamDataset
+            data = load_dataset("json", data_files=task, split="train", streaming=True)
+            dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
         
     return dataset
 
@@ -156,9 +170,7 @@ def get_eval_data_loader(args, tokenizer, num_workers=1, state_dict=None):
     if evaluation_data is None:
         return None
     
-    data = load_dataset('the_pile', split="validation", streaming=True)
-    from .pile import StreamDataset
-    dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
+    dataset = name_to_dataset_eval(evaluation_data, tokenizer, args)
     
     train_data_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=args.batch_size,
