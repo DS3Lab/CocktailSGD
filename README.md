@@ -26,10 +26,9 @@ wandb login
 ### (2) Download Pretrained Models
 
 We provide pretrained model checkpoints that are sharded by layers:
-- ~[OPT-1.3B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/opt-1.3b-new.zip)~
-- ~[GPT-J-6B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/gpt-j-6B-new.zip)~
-- ~[GPT-NeoX-20B](https://pretrained-models-inference.s3.eu-central-1.amazonaws.com/gpt-neox-20b-new.zip)~
-**Sorry that our S3 is no longer available. We will find an alternative and update soon.**
+- [OPT-1.3B](https://drive.google.com/file/d/12KrRkuxSREnvl9XGWCD72PHOIuVAod_V/view?usp=share_link)
+- [GPT-J-6B](https://drive.google.com/file/d/1xy2EzUvUhelNyeDZ43iyIok2O7PUqwWB/view?usp=share_link)
+- [GPT-NeoX-20B](https://drive.google.com/file/d/1Yj-_r-0kBSasfJpVhcKH2SdU36LjtJJc/view?usp=share_link)
 
 Please download and unzip the above ckpts to fine-tune them. 
 The path of unzipped model should be passed to `--model-name` and `--tokenizer-name` for fine-tuning.
