@@ -668,4 +668,101 @@ class GpipeAsync:
         # print(torch.cuda.memory_summary())
         self.global_step += 1
         return iter_time
+    
+    
+    def infer_stage(self, input_data=None, aux_input_data=None, 
+                    labels=None, pred_func=None):
+        
+        if aux_input_data is not None:
+            for k in aux_input_data:
+                aux_input_data[k] = torch.chunk(aux_input_data[k], self.micro_batch_num, dim=0)
+        else:
+            aux_input_data = {}
+        
+        if self.pp_rank == 0:
+            assert(input_data is not None)
+            self.input_micro_batches = torch.chunk(input_data, self.micro_batch_num, dim=0)
+        if self.pp_rank == self.pipeline_group_size - 1:
+            if input_data is not None:
+                input_ids_micro_batches = torch.chunk(input_data, self.micro_batch_num, dim=0)
+            else:
+                input_ids_micro_batches = [None]*self.micro_batch_num
+            if labels is not None:
+                labels = torch.chunk(labels, self.micro_batch_num, dim=0)
+            else:
+                labels = [None]*self.micro_batch_num
+                
+        output_micro_batches = []
+
+        for i in range(self.micro_batch_num):
+            if self.pipeline_group_size > 1:
+                if self.pp_rank == 0:  # Only send output to next node, do not receive
+                    with torch.cuda.stream(self.torch_comp_stream):
+                        current_micro_output = self.model(
+                            self.input_micro_batches[i], 
+                            **{k: v[i] for k, v in aux_input_data.items()},
+                        )
+                        self.torch_comp_stream.record_event(self.forward_comp_ready_events[i])
+                    with torch.cuda.stream(self.torch_send_stream):
+                        cupy_send_stream = cupy.cuda.ExternalStream(self.torch_send_stream.cuda_stream)
+                        self.torch_send_stream.wait_event(self.forward_comp_ready_events[i])
+                        self.comm.send(current_micro_output.data, dst=self.post_node_rank, stream=cupy_send_stream)
+                elif self.pp_rank == self.pipeline_group_size - 1:  # Only receive input from last node, do not send
+                    with torch.cuda.stream(self.torch_recv_stream):
+                        cupy_recv_stream = cupy.cuda.ExternalStream(self.torch_recv_stream.cuda_stream)
+                        self.comm.recv(self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
+                        self.torch_recv_stream.record_event(self.forward_recv_ready_events[i])
+                    with torch.cuda.stream(self.torch_comp_stream):
+                        self.torch_comp_stream.wait_event(self.forward_recv_ready_events[i])
+                        current_micro_output = self.model(
+                            self.input_micro_batches[i], input_ids=input_ids_micro_batches[i],
+                            **{k: v[i] for k, v in aux_input_data.items()},
+                        )
+                        current_micro_output = pred_func(current_micro_output, labels[i])
+                        self.torch_comp_stream.record_event(self.forward_comp_ready_events[i])
+                else:  # receive, compute, and send
+                    with torch.cuda.stream(self.torch_recv_stream):
+                        cupy_recv_stream = cupy.cuda.ExternalStream(self.torch_recv_stream.cuda_stream)
+                        self.comm.recv(self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
+                        self.torch_recv_stream.record_event(self.forward_recv_ready_events[i])
+                    with torch.cuda.stream(self.torch_comp_stream):
+                        self.torch_comp_stream.wait_event(self.forward_recv_ready_events[i])
+                        current_micro_output = self.model(
+                            self.input_micro_batches[i],
+                            **{k: v[i] for k, v in aux_input_data.items()},
+                        )
+                        self.torch_comp_stream.record_event(self.forward_comp_ready_events[i])
+                    with torch.cuda.stream(self.torch_send_stream):
+                        cupy_send_stream = cupy.cuda.ExternalStream(self.torch_send_stream.cuda_stream)
+                        self.torch_send_stream.wait_event(self.forward_comp_ready_events[i])
+                        self.comm.send(current_micro_output.data, dst=self.post_node_rank, stream=cupy_send_stream)
+            else:
+                with torch.cuda.stream(self.torch_comp_stream):
+                    current_micro_output = self.model(
+                        self.input_micro_batches[i],
+                        **{k: v[i] for k, v in aux_input_data.items()}
+                    )
+                    current_micro_output = pred_func(current_micro_output, labels[i])
+                    self.torch_comp_stream.record_event(
+                        self.forward_comp_ready_events[i])
+                    
+            output_micro_batches.append(current_micro_output)
+            
+        return output_micro_batches
+    
+    def infer_iter(self, input_=None, target=None, 
+                   output_=None, 
+                   aux_input_data=None, 
+                   pred_func=None):
+        self.comm.barrier()
+        torch.cuda.synchronize()
+        with torch.no_grad():
+            outputs = self.infer_stage(input_, 
+                                       aux_input_data=aux_input_data,
+                                       labels=target, pred_func=pred_func)
+            if output_ is not None:
+                outputs = torch.cat(outputs, 0).mean().item()
+                output_.append(outputs)
+        torch.cuda.synchronize()
+        self.comm.barrier()
 

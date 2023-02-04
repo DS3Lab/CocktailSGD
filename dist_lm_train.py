@@ -4,18 +4,71 @@ import random
 import numpy as np
 import torch
 import torch.autograd.profiler as profiler
-from tasks.data_loaders.data_utils import get_train_data_loader
+from tasks.data_loaders.data_utils import get_train_data_loader, get_eval_data_loader
 from modules.utils import gpt_loss_func
 from modules.tokenizer import build_tokenizer
 from pipeline_parallel.dist_pp_utils import get_pp_module
 
 from transformers import AutoConfig
+import datasets
 
 import wandb
 from utils.dist_args_utils import *
 from utils.dist_checkpoint_utils import *
 from comm.comm_utils import *
 import compress.flag
+
+
+def test_loop(args, pipe, device, test_data_loader):
+    
+    if test_data_loader is None:
+        return
+    
+    print('testing starts.....')
+    
+    pipe.model.eval()
+    
+    if get_pipeline_parallel_rank()  == args.pipeline_group_size - 1:
+        
+        def _lm_pred_func(x, y):
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
+            logits = x[:, :-1, :].contiguous().float()
+            labels = y[:, 1:].contiguous()
+            loss = loss_fct(logits.transpose(-1, -2), labels).mean(1).detach().cpu()
+            return loss
+        
+        loss_list = []
+        for i, data in enumerate(test_data_loader):
+            
+            if args.evaluation_num_batch is not None and i >= args.evaluation_num_batch:
+                break
+                
+            input_ids = data['input_ids'].to(device)
+            labels = input_ids.clone()
+            pipe.infer_iter(input_ids, labels, output_=loss_list, pred_func=_lm_pred_func)
+            
+        loss = torch.tensor(loss_list).mean()
+        ppls = torch.exp(loss)
+        metric = {"valid.perplexity": ppls.item(), "valid.loss": loss.item()}
+        
+        print(metric)
+        wandb.log(
+            metric, 
+            step=pipe.global_step,
+        )
+        
+    else:
+        for i, data in enumerate(test_data_loader):
+            
+            if args.evaluation_num_batch is not None and i >= args.evaluation_num_batch:
+                break
+            
+            input_ids = data['input_ids'].to(device)
+            labels = input_ids.clone()
+            current_iter_time = pipe.infer_iter(input_ids, labels)
+    
+    pipe.model.train()
+    
 
 
 def train_loop(args, pipe, device, train_data_loader, test_data_loader):
@@ -67,14 +120,15 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
                     )
                 
             input_ids = input_ids_list[0]
-            # prefix_masks = prefix_masks_list[0]
             
             pp_comm.broadcast(input_ids, 0)
-            # pp_comm.broadcast(prefix_masks, 0)
             
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
             labels = input_ids.clone()
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
+            
+            if pipe.global_step % args.evaluation_steps == 0:
+                test_loop(args, pipe, device, test_data_loader)
             
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
@@ -105,6 +159,9 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             labels = input_ids.clone()
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func)
             
+            if pipe.global_step % args.evaluation_steps == 0:
+                test_loop(args, pipe, device, test_data_loader)
+                
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
@@ -127,6 +184,9 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
             current_iter_time = pipe.sgd_iter(input_ids, labels, loss_func=gpt_loss_func) # lm loss func
             
+            if pipe.global_step % args.evaluation_steps == 0:
+                test_loop(args, pipe, device, test_data_loader)
+                
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
@@ -144,6 +204,9 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             compress.flag.FLAG_DISABLE_COMPRESSION = (pipe.global_step < args.train_warmup_steps)
             current_iter_time = pipe.sgd_iter(None, None)
             
+            if pipe.global_step % args.evaluation_steps == 0:
+                test_loop(args, pipe, device, test_data_loader)
+                
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
@@ -190,6 +253,10 @@ def main():
     parser.add_argument('--evaluation-steps', 
                         type=int, default=0, metavar='S',
                         help='every x steps, do evaluation. (0 means do not do evaluation)')
+    parser.add_argument('--evaluation-data',
+                        type=str, default=None, help="path of eval data in jsonl")
+    parser.add_argument('--evaluation-num-batch',
+                        type=int, default=None, help="for debug purpose, only eval the first several batch.")
     parser.add_argument('--checkpoint-steps', 
                         type=int, default=0, metavar='S',
                         help='every x steps, save checkpoint. (0 means do not save checkpoint)')
@@ -242,10 +309,11 @@ def main():
     
     if get_pipeline_parallel_rank() == 0 and dp_rank == 0:
         train_data_loader = get_train_data_loader(args, tokenizer)
-        test_data_loader = None
     else:
         train_data_loader = None
-        test_data_loader = None
+        
+    if args.evaluation_data is not None:
+        test_data_loader = get_eval_data_loader(args, tokenizer)
         
     if args.total_steps is None:
         args.total_steps = len(train_data_loader)

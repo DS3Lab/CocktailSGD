@@ -141,3 +141,32 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
     
     return train_data_loader
 
+
+def get_eval_data_loader(args, tokenizer, num_workers=1, state_dict=None):
+    
+    task_list = args.task_name.split(',')
+    task_names = []
+    datasets = []
+    probs = []
+    
+    print('data_utils: parse task_list')
+    
+    evaluation_data = args.evaluation_data
+    
+    if evaluation_data is None:
+        return None
+    
+    data = load_dataset('the_pile', split="validation", streaming=True)
+    from .pile import StreamDataset
+    dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
+    
+    train_data_loader = torch.utils.data.DataLoader(dataset,
+                                                    batch_size=args.batch_size,
+                                                    shuffle=False,
+                                                    drop_last=True,
+                                                    num_workers=num_workers,
+                                                    pin_memory=True,
+                                                    collate_fn=None)
+    
+    return train_data_loader
+
