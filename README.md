@@ -38,6 +38,18 @@ pip install flash-attn
 
 In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
 
+We now integrate flash attention to OPT models. Please set `--model-type flash_opt` to use it .
+
+### (Optional) Install Nvidia Apex
+
+```
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+```
+
+In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
+
 
 ### (2) Download Pretrained Models
 
@@ -84,7 +96,7 @@ export QUANT_BITS=4        # CocktailSGD: Quantization bits
 The following arguments should be carefully set:
 - `--model-name`: The path of model ckpt sharded by layers.
 - `--tokenizer-name`: Usually the same to `--model-name`. You can also use HF's model name.
-- `--model-type`: Indicate the model type. {opt, gptj, gptneox}
+- `--model-type`: Indicate the model type. {opt, flash_opt, gptj, gptneox}. The 'flash_' prefix uses flash attention to accelerate training.
 - `--num-layers`: Number of Transformer layers **for each GPU**. E.g. OPT-1.3B has 24 layers, if we use two GPUs to form a pipeline, `--num-layers` should be 12.
 - `--embedding-dim`: The hidden size of the model. OPT-1.3B is 2048, GPT-J-6B is 4096, GPT-NeoX-20B is 6144. This is used to create buffers.
 - `--dist-url`: URL of rank 0 worker (master). It is the same to all workers. And this URL should be accessible by all workers. For local training (single machine multiple GPUs), this can be like `--dist-url tcp://127.0.0.1:7033`
@@ -109,7 +121,7 @@ The following arguments can be tuned / changed:
 - `--micro-batch-size`: micro batch size for pipeline parallelism. 1 works fine.
 - `--gradient-accumulate-step`: Accumulate gradients for several steps before updating parameters. This is another way to achieve large batch sizes when GPU memory is not enough.
 - `--dp-backend`: {gloo, nccl}
-- `--dp-mode`: {allreduce, cocktail_sgd}. `cocktail_sgd` should always set `--dp-backend gloo`
+- `--dp-mode`: {allreduce, cocktail_sgd}. `cocktail_sgd` should always set `--dp-backend gloo`, `allreduce` performs better at `nccl`.
 
 The following arguments usually do not change:
 - `--fp16`: Flag to enable FP16 mixed precision training. Should always adding it for the current impl.
