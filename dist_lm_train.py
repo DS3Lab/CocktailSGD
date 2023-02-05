@@ -32,8 +32,8 @@ def test_loop(args, pipe, device, test_data_loader):
         
         def _lm_pred_func(x, y):
             loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
-            logits = x[:, 1024:][:, :-1, :].contiguous().float()
-            labels = y[:, 1024:][:, 1:].contiguous()
+            logits = x[:, :-1, :].contiguous().float()
+            labels = y[:, 1:].contiguous()
             loss = loss_fct(logits.transpose(-1, -2), labels).mean(1).detach().cpu()
             return loss
         
