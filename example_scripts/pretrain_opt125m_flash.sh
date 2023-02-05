@@ -16,7 +16,7 @@ ARGS="--model-name ./empty_model_configs/opt-125m \
 --tokenizer-name ./empty_model_configs/opt-125m \
 --load-pretrained-model false \
 --project-name cocktail-sgd \
---model-type opt \
+--model-type flash_opt \
 --optimizer adam \
 --seed 42 \
 --task-name pile \
