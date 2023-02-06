@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=opt-125m-flash
+export WANDB_NAME=neo-125m-flash
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
@@ -12,11 +12,11 @@ export SHOW_DATA=0
 # NOTE: for debug purpose, the evaluation-steps is set to be 100 and the evaluation-num-batch is set to 10
 # feel free to increase evaluation-steps and remove evaluation-num-batch (for full eval).
 
-ARGS="--model-name ./empty_model_configs/opt-125m \
---tokenizer-name ./empty_model_configs/opt-125m \
+ARGS="--model-name ./empty_model_configs/gpt-neo-125m \
+--tokenizer-name ./empty_model_configs/gpt-neo-125m \
 --load-pretrained-model false \
 --project-name cocktail-sgd \
---model-type flash_opt \
+--model-type flash_gptneo \
 --optimizer adam \
 --seed 42 \
 --task-name pile \

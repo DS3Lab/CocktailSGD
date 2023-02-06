@@ -31,6 +31,8 @@ class GPTStageBase(nn.Module):
                 from .hf_gptj_modules import GPTEmbeddings, GPTBlock, GPTLMHead
             elif args.model_type == "gptneo": 
                 from .hf_gptneo_modules import GPTEmbeddings, GPTBlock, GPTLMHead
+            elif args.model_type == "flash_gptneo": 
+                from .hf_flash_gptneo_modules import GPTEmbeddings, GPTBlock, GPTLMHead
             elif args.model_type == "gptneox": 
                 from .hf_gptneox_modules import GPTEmbeddings, GPTBlock, GPTLMHead
             elif args.model_type == "opt":
