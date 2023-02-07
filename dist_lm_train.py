@@ -238,6 +238,7 @@ def main():
     parser.add_argument('--warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--train-warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--total-steps', type=int, default=None, help='-')
+    parser.add_argument('--scheduler', type=str, default='linear')
     parser.add_argument('--load-pretrained-model', 
                         type=lambda x: x.lower()=='true', default=True, metavar='S',
                         help='load pretrained model or not.')

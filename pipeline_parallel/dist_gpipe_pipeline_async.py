@@ -9,7 +9,7 @@ from optimizer.optimizer import get_fp16_optimizer
 import os
 import cupy
 import wandb
-from transformers import get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 flag_profile = int(os.environ.get('FLAG_BENCHMARK', '0'))
 
@@ -216,13 +216,20 @@ class GpipeAsync:
                     self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
                 self.optimizer = get_fp16_optimizer(
                     args, tmp_optimizer, device)
-                self.scheduler = get_linear_schedule_with_warmup(
-                    tmp_optimizer, args.warmup_steps, args.total_steps, )
+                optim = tmp_optimizer
             else:
                 self.optimizer = create_optimizer(
                     self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
+                optim = self.optimizer
+            if args.scheduler == 'linear':
                 self.scheduler = get_linear_schedule_with_warmup(
-                    self.optimizer, args.warmup_steps, args.total_steps, )
+                    optim, args.warmup_steps, args.total_steps, )
+            elif args.scheduler == 'cosine':
+                self.scheduler = get_cosine_schedule_with_warmup(
+                    optim, args.warmup_steps, args.total_steps, )
+            else:
+                raise NotImplementedError('Scheduler {} not implemented'.format(args.scheduler))
+
 
             # Notice that if we use fp16, gradients are aggregated in fp16, this may not be the default in Megatron.
             if use_dp:
