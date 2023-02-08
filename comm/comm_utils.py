@@ -78,7 +78,7 @@ def default_init(args):
         print(f"new master url: {args.dist_url}")
     except:
         pass
-    dist.init_process_group(backend='gloo', timeout=datetime.timedelta(seconds=5*60), init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
+    dist.init_process_group(backend='gloo', timeout=datetime.timedelta(seconds=30*60), init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
     
 
 def init_communicators(args):
