@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=flash-opt-125m-pretrain-pile-cocktail-5b-tok-4.5toka
+export WANDB_NAME=flash-opt-125m-pretrain-pile-cocktail-5b-tok-4.5tok
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
