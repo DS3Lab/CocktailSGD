@@ -221,12 +221,16 @@ class GpipeAsync:
                 self.optimizer = create_optimizer(
                     self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
                 optim = self.optimizer
+            if args.total_scheduler_steps is not None:
+                total_sched_steps = args.total_scheduler_steps
+            else:
+                total_sched_steps = args.total_steps
             if args.scheduler == 'linear':
                 self.scheduler = get_linear_schedule_with_warmup(
-                    optim, args.warmup_steps, args.total_steps, )
+                    optim, args.warmup_steps, total_sched_steps, )
             elif args.scheduler == 'cosine':
                 self.scheduler = get_cosine_schedule_with_warmup(
-                    optim, args.warmup_steps, args.total_steps, )
+                    optim, args.warmup_steps, total_sched_steps, )
             else:
                 raise NotImplementedError('Scheduler {} not implemented'.format(args.scheduler))
 

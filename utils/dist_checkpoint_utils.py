@@ -9,15 +9,18 @@ from comm.comm_utils import *
 
 
 def load_checkpoint(pipe, args):
-    
-    if os.path.isfile(os.path.join(args.checkpoint_path, 'latest')):
-        with open(os.path.join(args.checkpoint_path, 'latest')) as f:
+    if args.load_checkpoint_path is not None:
+        checkpoint_path = args.load_checkpoint_path
+    else:
+        checkpoint_path = args.checkpoint_path
+    if os.path.isfile(os.path.join(checkpoint_path, 'latest')):
+        with open(os.path.join(checkpoint_path, 'latest')) as f:
             latest_step = int(f.read())
     else:
         print('no checkpoint available, skipping')
         return
     
-    checkpoint_step_path = os.path.join(args.checkpoint_path, f"checkpoint_{latest_step}")
+    checkpoint_step_path = os.path.join(checkpoint_path, f"checkpoint_{latest_step}")
     
     try:
         with open(os.path.join(checkpoint_step_path, 'meta.json')) as f:

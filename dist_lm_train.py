@@ -233,11 +233,13 @@ def main():
     parser.add_argument('--model-type', type=str, default='gpt2', metavar='S',
                         help='model name or path')
     parser.add_argument('--checkpoint-path', type=str, default='model_checkpoints/gpt2')
+    parser.add_argument('--load-checkpoint-path', type=str, default=None, help='Path to load checkpoint from, if different from checkpoint-path')
     parser.add_argument('--task-name', type=str, default='cot', metavar='S',
                         help='task name')
     parser.add_argument('--warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--train-warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--total-steps', type=int, default=None, help='-')
+    parser.add_argument('--total-scheduler-steps', type=int, default=None, help='-')
     parser.add_argument('--scheduler', type=str, default='linear')
     parser.add_argument('--load-pretrained-model', 
                         type=lambda x: x.lower()=='true', default=True, metavar='S',
