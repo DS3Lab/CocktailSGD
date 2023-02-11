@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=opt-125m-pretrain-pile-cocktail-sgd-15b-tok
+export WANDB_NAME=flash-opt-125m-pretrain-pile-cocktail-sgd-15b-tok
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
@@ -21,7 +21,7 @@ ARGS="--model-name ./empty_model_configs/opt-125m \
 --num-layers 12 --embedding-dim 768 \
 --total-steps 30000 --warmup-steps 300 --train-warmup-steps 0 \
 --checkpoint-steps 500 \
---evaluation-steps 1000 \
+--evaluation-steps 2000 \
 --evaluation-data pile \
 --lr 6e-4 --seq-length 2048 --batch-size 32 --micro-batch-size 1 --gradient-accumulate-step 1 \
 --dist-url tcp://127.0.0.1:7033 \

@@ -1,12 +1,12 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=flash-opt2-125m-pretrain-pile-cocktail-5b-tok-warmup-0.5b-linear-10xcomp
+export WANDB_NAME=flash-opt2-125m-pretrain-pile-cocktail-5b-tok-warmup-0.5b-linear-nocomp
 # export WANDB_NAME=test
 
-export QUANT_BITS=4
-export TOPK_RATIO=0.5
-export RANDOMP_RATIO=0.4
+export QUANT_BITS=32
+export TOPK_RATIO=1
+export RANDOMP_RATIO=1
 
 export SHOW_DATA=0
 

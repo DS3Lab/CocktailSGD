@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=flash-opt-125m-pretrain-pile-cocktail-5b-tok-4.5tok
+export WANDB_NAME=flash-opt-125m-pretrain-pile-allreduce-nccl-5b-tok-warmup-0.5tok
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
@@ -9,11 +9,12 @@ export RANDOMP_RATIO=0.1
 
 export SHOW_DATA=0
 
+# --load-checkpoint-path ./model_ckpts/flash-opt-125m-pretrain-pile-allreduce-nccl-5b-tok-warmup-0.5tok \
+
 ARGS="--model-name ./empty_model_configs/opt-125m \
 --tokenizer-name ./empty_model_configs/opt-125m \
 --load-pretrained-model false \
 --load-checkpoint true \
---load-checkpoint-path ./model_ckpts/flash-opt-125m-pretrain-pile-allreduce-nccl-5b-tok-warmup-0.5tok \
 --project-name cocktail-sgd \
 --model-type flash_opt \
 --optimizer adam \
