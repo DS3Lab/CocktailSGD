@@ -13,7 +13,8 @@ _TENSOR_PARALLEL_COMM = None
 _TENSOR_PARALLEL_RANK = None
 _TENSOR_PARALLEL_WORLD_SIZE = None
 
-import threading 
+import threading
+import datetime
 
 _LOCK = threading.RLock()
 
@@ -66,8 +67,6 @@ def get_megatron_tensor_parallel_world_size() -> int:
 
 
 def default_init(args):
-    import datetime
-    import time
     try:
         dist.destroy_process_group()
         # the first time will raise exception, so the following code is skipped.
@@ -76,10 +75,9 @@ def default_init(args):
         port = int(args.dist_url.split(':')[-1]) + 1
         args.dist_url = f"{url}:{port}"
         print(f"new master url: {args.dist_url}")
-    except:
-        pass
+    except Exception as e:
+        print("destroy_process_group except Exception: {}".format(str(e)))
     dist.init_process_group(backend='gloo', timeout=datetime.timedelta(seconds=30*60), init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-    
 
 def init_communicators(args):
     default_init(args)
