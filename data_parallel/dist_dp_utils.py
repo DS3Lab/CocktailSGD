@@ -2,6 +2,7 @@ from .dist_dp_allreduce import AllReduceDP
 from .dist_dp_sharded_ps import ShardedPSDP
 from .dist_dp_local import LocalDP
 from .dist_dp_cocktail_sgd import CocktailSGDDP
+from .dist_dp_cocktail_sgd_grad import CocktailSGDGradDP
 
 
 def get_dp_module(args, device, module, optimizer):
@@ -15,6 +16,8 @@ def get_dp_module(args, device, module, optimizer):
         return ShardedPSDP(args, device, module, optimizer, flatten=False)
     elif args.dp_mode == 'cocktail_sgd':
         return CocktailSGDDP(args, device, module, optimizer, flatten=True)
+    elif args.dp_mode == 'cocktail_sgd_grad':
+        return CocktailSGDGradDP(args, device, module, optimizer, flatten=True)
     else:
         print("Not recognize this data parallel mode.")
         assert False
