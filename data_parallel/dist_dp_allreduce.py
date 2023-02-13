@@ -5,18 +5,24 @@ from .flatten_utils import flatten_params
 
 class AllReduceDP:
     def __init__(self, args, device, module: torch.nn.Module, optimizer: torch.optim.Optimizer = None, flatten=True):
+        self.args = args
         self.flatten = flatten
         self.global_rank = args.rank
         self.dp_group_size = args.data_group_size
         self.enable_tidy_profiling = (args.profiling == 'tidy_profiling')
-        self.dp_comm = get_data_parallel_comm()
+        # self.dp_comm = get_data_parallel_comm()
         self.dp_rank = get_data_parallel_rank()
+        self.pp_comm = get_pipeline_parallel_comm()
+        self.pp_rank = get_pipeline_parallel_rank()
+        self.pp_group_size = get_pipeline_parallel_world_size()
+        self.device = device
         self.dp_comm_stream = torch.cuda.Stream(device=device, priority=-1)
         self.torch_optim_comp_stream = torch.cuda.default_stream(device=device)
         self.backward_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
         self.allreduce_grad_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
         self.optimizer_step_ready_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling, blocking=False)
 
+        self.flag_dp_exception = 0
         self.module = module
         num_paras, element_size = self._compute_total_para_num()
         print("Total number of parameters: {}, element size: {}, total size {} MB."
@@ -47,6 +53,10 @@ class AllReduceDP:
 
             self.optimizer_step_start_event = torch.cuda.Event(enable_timing=self.enable_tidy_profiling,
                                                                blocking=False)
+
+    @property
+    def dp_comm(self):
+        return get_data_parallel_comm()
 
     def _compute_total_para_num(self):
         total_count = 0
@@ -90,8 +100,23 @@ class AllReduceDP:
                     self.profile_mark_allreduce_end(name)
             self.dp_comm_stream.record_event(self.allreduce_grad_ready_event)
 
+    def reinit_dp_comm_if_wrong(self):
+        buffers = [torch.zeros(1).long().to(self.device) for _ in range(self.pp_group_size)]
+        self.pp_comm.all_gather(torch.tensor(self.flag_dp_exception).long().to(self.device), buffers)
+        self.flag_dp_exception = max([s.item() for s in buffers])
+
+        if self.flag_dp_exception:
+            reinit_dp_communicator(self.args)
+            self.flag_dp_exception = 0
+
     def optimizer_step(self):
-        self._allreduce_gradients()
+        try:
+            self._allreduce_gradients()
+        except Exception as e:
+            print("_allreduce_gradients except exception: {}.".format(str(e)))
+            self.flag_dp_exception = 1
+            self.reinit_dp_comm_if_wrong()
+
         with torch.cuda.stream(self.torch_optim_comp_stream):
             self.torch_optim_comp_stream.wait_event(self.allreduce_grad_ready_event)
             self.profile_mark_optimizer_step_start()
