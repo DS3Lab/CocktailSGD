@@ -21,7 +21,7 @@ ARGS="--model-name /root/fm/models/gpt-neo-1.3b-new \
 --num-layers 12 --embedding-dim 2048 \
 --total-steps 200 --warmup-steps 10 --train-warmup-steps 0 \
 --checkpoint-steps 100 \
---lr 1e-4 --seq-length 2048 --batch-size 16 --micro-batch-size 16 --gradient-accumulate-step 1 \
+--lr 1e-4 --seq-length 2048 --batch-size 16 --micro-batch-size 2 --gradient-accumulate-step 1 \
 --dist-url tcp://127.0.0.1:7033 \
 --world-size 8 --pipeline-group-size 2 --data-group-size 4 \
 --job-id 0 --net-interface ${netif} \
