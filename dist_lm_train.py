@@ -9,7 +9,7 @@ from modules.utils import gpt_loss_func
 from modules.tokenizer import build_tokenizer
 from pipeline_parallel.dist_pp_utils import get_pp_module
 
-from transformers import AutoConfig
+from transformers import AutoConfig, PretrainedConfig
 import datasets
 
 import wandb
@@ -291,8 +291,28 @@ def main():
     else:
         dp_rank = 0
         dp_size = 1
-    
-    config = AutoConfig.from_pretrained(args.model_name)
+
+    if args.model_type != 'h3': 
+        config = AutoConfig.from_pretrained(args.model_name)
+    else:
+        # H3 does not have AutoConfig
+        config = PretrainedConfig.from_dict({
+            'n_layer': args.num_layers,
+            'd_model': args.embedding_dim,
+            'd_inner': args.embedding_dim * 4,
+            'vocab_size': 50257,
+            'attn_cfg': dict(num_heads = 12), # HARD CODED FOR 125M
+            'attn_layer_idx': [1, 8], # HARD CODED FOR 125M
+            'ssm_cfg': dict(mode='diag', measure='diag-lin'),
+            'pad_vocab_size_multiple': 8,
+            'max_position_embeddings': 0,
+            'resid_dropout': 0.0,
+            'embed_dropout': 0.1,
+            'layer_norm_epsilon': 1e-5,
+            'fused_mlp': True,
+            'fused_dropout_add_ln': True,
+            'residual_in_fp32': True
+        })
     
     # num layer globally
     if hasattr(config, 'num_hidden_layers'):

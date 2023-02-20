@@ -1,20 +1,21 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=flash-opt2-125m-pretrain-pile-cocktail-5b-tok-warmup-0.5b-linear-811
+export WANDB_NAME=h3-125m-pretrain-pile-ar-5btok-linear
 # export WANDB_NAME=test
 
-export QUANT_BITS=8
-export TOPK_RATIO=1
-export RANDOMP_RATIO=1
+export QUANT_BITS=4
+export TOPK_RATIO=0.5
+export RANDOMP_RATIO=0.4
 
 export SHOW_DATA=0
 
-ARGS="--model-name ./empty_model_configs/opt-125m \
---tokenizer-name ./empty_model_configs/opt-125m \
+# the model name argument is IGNORED
+ARGS="--model-name ./empty_model_configs/h3 \
+--tokenizer-name gpt2 \
 --load-pretrained-model false \
 --project-name cocktail-sgd \
---model-type flash_opt \
+--model-type h3 \
 --optimizer adam \
 --seed 42 \
 --task-name pile \
@@ -25,13 +26,12 @@ ARGS="--model-name ./empty_model_configs/opt-125m \
 --evaluation-steps 4000 \
 --evaluation-num-batch 256 \
 --evaluation-data pile \
---lr 6e-4 --seq-length 2048 --batch-size 32 --micro-batch-size 32 --gradient-accumulate-step 1 \
+--lr 6e-4 --seq-length 2048 --batch-size 16 --micro-batch-size 8 --gradient-accumulate-step 2 \
 --dist-url tcp://127.0.0.1:7033 \
 --world-size 8 --pipeline-group-size 1 --data-group-size 8 \
 --job-id 0 --net-interface ${netif} \
---fp16 \
---dp-backend gloo \
---dp-mode cocktail_sgd \
+--dp-backend nccl \
+--dp-mode allreduce \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \

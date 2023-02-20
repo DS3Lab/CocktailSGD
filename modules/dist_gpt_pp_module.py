@@ -39,6 +39,8 @@ class GPTStageBase(nn.Module):
                 from .hf_opt_modules import GPTEmbeddings, GPTBlock, GPTLMHead
             elif args.model_type == "flash_opt":
                 from .hf_flash_opt_modules import GPTEmbeddings, GPTBlock, GPTLMHead
+            elif args.model_type == "h3":
+                from .h3.ssm_seq import GPTEmbeddings, GPTBlock, GPTLMHead
             else:
                 raise Exception("unknown")
         else:
