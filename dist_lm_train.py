@@ -354,9 +354,6 @@ def main():
     if args.load_checkpoint:
         load_checkpoint(pipe, args)
 
-    if args.fp16:
-        pipe.optimizer.reload_model_params()
-
     if args.profiling == 'no-profiling':
         train_loop(args, pipe, device, train_data_loader, test_data_loader)
     else:
