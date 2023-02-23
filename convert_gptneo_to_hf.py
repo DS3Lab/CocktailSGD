@@ -5,6 +5,9 @@ import argparse
 
 from transformers import GPTNeoForCausalLM
 
+###!!!!
+GPTNeoForCausalLM._keys_to_ignore_on_save = []
+
 from transformers import AutoConfig, AutoTokenizer
 
 from transformers.modeling_utils import no_init_weights
@@ -120,3 +123,6 @@ if __name__ == '__main__':
     model.save_pretrained(args.save_path)
     config.save_pretrained(args.save_path)
     tokenizer.save_pretrained(args.save_path)
+
+    model.to('cuda:0')
+    print(tokenizer.batch_decode(model.generate(**tokenizer("hello,", return_tensors='pt').to(model.device))))
