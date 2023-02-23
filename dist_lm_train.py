@@ -236,6 +236,8 @@ def main():
     parser.add_argument('--load-checkpoint-path', type=str, default=None, help='Path to load checkpoint from, if different from checkpoint-path')
     parser.add_argument('--task-name', type=str, default='cot', metavar='S',
                         help='task name')
+    parser.add_argument('--mixture_weights_path', type=str, default=None, help=".pkl file of dictionary mapping from task name to sampling weight.")
+    parser.add_argument('--dev_split_path', type=str, default="/root/mayee/dev_split_map.pkl", help=".pkl file of dictionary mapping from task name to sampling weight.")
     parser.add_argument('--warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--train-warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--total-steps', type=int, default=None, help='-')

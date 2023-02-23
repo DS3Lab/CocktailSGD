@@ -8,13 +8,22 @@ import random
 from datasets import Dataset
 from datasets import load_dataset, load_from_disk
 from comm.comm_utils import *
+import numpy as np
+import pickle 
 
 
 
 class StreamDataset(IterableDataset):
-    def __init__(self, data_path, tokenizer, seq_length=1024):
-        
+    def __init__(self, data_path, tokenizer, mixture_weights_path, dev_split_path, seq_length=1024):
         self.data_path = data_path
+        
+        
+        if mixture_weights_path is not None:
+            with open(mixture_weights_path, 'rb') as f:
+                mixture_weights = pickle.load(f)
+            
+        with open(dev_split_path, "rb") as f:
+            self.dev_split = pickle.load(f)
         
         self.train_splits = []
         with open(os.path.join(data_path, 'splits/default/train_tasks.txt')) as f:
@@ -28,12 +37,23 @@ class StreamDataset(IterableDataset):
         ]
         self.tasks = []
         self.classification_tasks = []
+        self.mixture_weights = []
         for task_path in self.task_paths:
             with open(task_path) as f:
                 task = json.load(f)
                 
             output_space = set()
             is_classification = True
+            
+            # remove small tasks 
+            if len(task['Instances']) < 100:
+                continue 
+                        
+            # remove dev data from the instances
+            
+            task_name = ".".join(task_path.split("/")[-1].split(".")[:-1])
+            task['Instances'] = [obj for i, obj in enumerate(task['Instances']) if i not in self.dev_split[task_name]]
+            
             for instance in task['Instances']:
                 output_space.add(instance['output'][0])
                 if len(output_space) > 10:
@@ -44,6 +64,15 @@ class StreamDataset(IterableDataset):
             if is_classification:
                 self.classification_tasks.append(task)
             self.tasks.append(task)
+            
+            if mixture_weights_path is not None:
+                self.mixture_weights.append(mixture_weights[task_name]) # we construct this here to make sure the correspondence to tasks is correct
+        
+        if mixture_weights_path is not None:
+            self.mixture_weights = np.array(self.mixture_weights)
+            print(f"Mixture weights loaded: {self.mixture_weights}")
+        else:
+            print("No mixture weights. Sampling uniformly. ")
         
         self.tokenizer = tokenizer
         self.seq_length = seq_length
@@ -55,7 +84,7 @@ class StreamDataset(IterableDataset):
         self.sample_splitters = ['\n', '\n\n', '\n\n', '\n\n\n', '\n###\n', '\n---\n']
         self.answer_splitters = ['\n', '\n', '\n\n']
         
-        self.iter_count = 0
+        self.iter_count = 0  
         
     def state_dict(self):
         return {
@@ -101,6 +130,7 @@ class StreamDataset(IterableDataset):
         text_context = text_def
         
         while True:
+            # pick a random instance and do the formatting to add prompt stuff before and after , then tokenize
             instance = random.choice(task['Instances'])
             text_context += sample_splitter + text_input + instance['input'] + answer_splitter + text_output + random.choice(instance['output'])
             input_ids = self.tokenizer(text_context.strip())['input_ids']
@@ -113,15 +143,23 @@ class StreamDataset(IterableDataset):
         return input_ids
         
     def get_sequence(self):
-        
         while True:
-            
             # ensure at least 30% classification
-            if random.random() < 0.3:
-                task = random.choice(self.classification_tasks)
+            #if random.random() < 0.3:
+            #    task = random.choice(self.classification_tasks)
+            #else:
+            
+            
+            # select a task with probability proportional to the weights 
+            if len(self.mixture_weights) > 0:
+                task_idx = np.random.choice(np.arange(len(self.tasks)), p=self.mixture_weights)
+                task = self.tasks[task_idx]
             else:
                 task = random.choice(self.tasks)
-
+            # we either already have skimmed down the dataset, or we can perform the sampling here...
+            # random.choice(self.tasks, p = the thing we learn!) 
+            
+            # then pick a random sample from that task. Note that we have already removed the dev data from the task.
             input_ids = self.sample_text_from_task(task)
 
             self.iter_count += 1
@@ -132,6 +170,7 @@ class StreamDataset(IterableDataset):
             
                 
     def get_stream(self):
+        # iterator is INFINITE so there will be duplicates 
         return cycle(self.get_sequence())
     
     def __iter__(self):

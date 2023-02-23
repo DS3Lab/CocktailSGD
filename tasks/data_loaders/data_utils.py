@@ -19,7 +19,6 @@ SHOW_DATA = int(os.environ.get('SHOW_DATA', 1))
 
 class StreamDatasetList(IterableDataset):
     def __init__(self, task_names, datasets, sample_probs, tokenizer, seq_length=1024, print_sample_every_n=64,):
-        
         self.task_names = task_names
         self.datasets = datasets
         self.sample_probs = sample_probs
@@ -74,7 +73,8 @@ def name_to_dataset(task, tokenizer, args):
     if task != '':
         if task == 'natural_instructions' or task == 'ni':
             from .natural_instructions import StreamDataset
-            dataset = StreamDataset('./natural-instructions/', tokenizer, args.seq_length)
+            # take in mixture weight file 
+            dataset = StreamDataset('./natural-instructions/', tokenizer, args.mixture_weights_path, args.dev_split_path, args.seq_length)
         elif task == 'p3':
             from .p3 import StreamDataset
             data = load_dataset("Muennighoff/P3", split="train").shuffle(seed=args.seed)
