@@ -5,6 +5,9 @@ import argparse
 
 from transformers import GPTNeoForCausalLM
 
+###!!!!
+GPTNeoForCausalLM._keys_to_ignore_on_save = []
+
 from transformers import AutoConfig, AutoTokenizer
 
 from transformers.modeling_utils import no_init_weights
