@@ -642,7 +642,8 @@ class GpipeAsync:
             if hasattr(self.dp_optim, 'pre_optimizer_step'):
                 self.dp_optim.pre_optimizer_step()
 
-        outputs = self.forward_stage(input_, aux_input_data=aux_input_data)
+        with torch.autocast('cuda', dtype=torch.bfloat16):
+            outputs = self.forward_stage(input_, aux_input_data=aux_input_data)
         forward_time = time.time()
         forward_slot = forward_time-start_time
         print("Rank {} node forward pass {}/{} takes {:3.2f}s"
@@ -767,7 +768,7 @@ class GpipeAsync:
                    pred_func=None):
         # self.comm.barrier()
         torch.cuda.synchronize()
-        with torch.no_grad():
+        with torch.no_grad(), torch.autocast('cuda', dtype=torch.bfloat16):
             outputs = self.infer_stage(input_, 
                                        aux_input_data=aux_input_data,
                                        labels=target, pred_func=pred_func)

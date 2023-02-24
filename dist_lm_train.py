@@ -301,9 +301,9 @@ def main():
             'd_model': args.embedding_dim,
             'd_inner': args.embedding_dim * 4,
             'vocab_size': 50257,
-            'attn_cfg': dict(num_heads = 12), # HARD CODED FOR 125M
+            'attn_cfg': dict(num_heads = 12, fused_bias_fc=True, use_flash_attn=True), # HARD CODED FOR 125M
             'attn_layer_idx': [1, 8], # HARD CODED FOR 125M
-            'ssm_cfg': dict(mode='diag', measure='diag-lin'),
+            'ssm_cfg': dict(mode='diag', measure='diag-lin', use_fast_fftconv=True),
             'pad_vocab_size_multiple': 8,
             'max_position_embeddings': 0,
             'resid_dropout': 0.0,
