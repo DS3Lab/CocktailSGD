@@ -11,6 +11,8 @@ import cupy
 import wandb
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 
+from torch.cuda.amp import GradScaler, autocast
+
 flag_profile = int(os.environ.get('FLAG_BENCHMARK', '0'))
 
 def get_parameter_names(model, forbidden_layer_types):
@@ -84,6 +86,7 @@ class GpipeAsync:
         if args.fp16:
             self.use_fp16 = True
             self.use_dynamic_scale = (args.loss_scale == 0)
+            self.scaler = GradScaler()
             print("=======Gpipe use FP16")
         else:
             self.use_fp16 = False
@@ -102,6 +105,7 @@ class GpipeAsync:
         self.post_node_rank = self.pp_rank + \
             1 if self.pp_rank != self.pipeline_group_size - 1 else -1
         self.comm = get_pipeline_parallel_comm()
+        self.dp_comm = get_data_parallel_comm()
         self.gradient_accumulate_step = args.gradient_accumulate_step
         print("=======Gradient accumulate step: ",
               self.gradient_accumulate_step)
@@ -207,20 +211,10 @@ class GpipeAsync:
         else:
             self.model = _StageFull(args, config, device)
 
-        if self.use_fp16:
-            self.model.half()
-
         if do_train:
-            if self.use_fp16:
-                tmp_optimizer = create_optimizer(
-                    self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
-                self.optimizer = get_fp16_optimizer(
-                    args, tmp_optimizer, device)
-                optim = tmp_optimizer
-            else:
-                self.optimizer = create_optimizer(
-                    self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
-                optim = self.optimizer
+            self.optimizer = create_optimizer(
+                self.model, optimizer_type=getattr(args, 'optimizer', 'adamw'), learning_rate=args.lr)
+            optim = self.optimizer
             if args.total_scheduler_steps is not None:
                 total_sched_steps = args.total_scheduler_steps
             else:
@@ -327,7 +321,7 @@ class GpipeAsync:
         for i in range(self.micro_batch_num):
             if self.pipeline_group_size > 1:
                 if self.pp_rank == 0:  # Only send output to next node, do not receive
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.profile_mark_forward_comp_start(i)
                         current_micro_output = self.model(
                             self.input_micro_batches[i],
@@ -353,7 +347,7 @@ class GpipeAsync:
                             self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(
                             self.forward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(
                             self.forward_recv_ready_events[i])
                         self.profile_mark_forward_comp_start(i)
@@ -372,7 +366,7 @@ class GpipeAsync:
                             self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(
                             self.forward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(
                             self.forward_recv_ready_events[i])
                         self.profile_mark_forward_comp_start(i)
@@ -392,7 +386,7 @@ class GpipeAsync:
                                        dst=self.post_node_rank, stream=cupy_send_stream)
                         self.profile_mark_forward_send_end(i)
             else:
-                with torch.cuda.stream(self.torch_comp_stream):
+                with torch.cuda.stream(self.torch_comp_stream), autocast():
                     self.profile_mark_forward_comp_start(i)
                     current_micro_output = self.model(
                         self.input_micro_batches[i],
@@ -450,14 +444,14 @@ class GpipeAsync:
         for i in range(self.micro_batch_num):
             if self.pipeline_group_size > 1:
                 if self.pp_rank == self.pipeline_group_size - 1:  # only send grad back to last node, do not receive
-                    with torch.cuda.stream(self.torch_comp_stream) as st:
+                    with torch.cuda.stream(self.torch_comp_stream) as st, autocast():
                         self.profile_mark_backward_comp_start(i)
                         loss = loss_func(
                             input=cached_output_micro_batches[i], target=target_as_micro_batches[i])
                         if not flag_profile:
                             tr_loss.append(loss.item())
-                        if self.use_fp16:
-                            self.optimizer.scale(loss).backward()
+                        if self.use_fp16 and self.use_dynamic_scale:
+                            self.scaler.scale(loss).backward()
                         else:
                             loss.backward()
                         self.torch_comp_stream.record_event(
@@ -480,7 +474,7 @@ class GpipeAsync:
                             self.output_micro_batches_grad[i], src=self.post_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(
                             self.backward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(
                             self.backward_recv_ready_events[i])
                         self.profile_mark_backward_comp_start(i)
@@ -497,7 +491,7 @@ class GpipeAsync:
                             self.output_micro_batches_grad[i], src=self.post_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(
                             self.backward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(
                             self.backward_recv_ready_events[i])
                         self.profile_mark_backward_comp_start(i)
@@ -516,18 +510,21 @@ class GpipeAsync:
                         self.profile_mark_backward_send_end(i)
             else:
                 
-                with torch.cuda.stream(self.torch_comp_stream) as st:
+                with torch.cuda.stream(self.torch_comp_stream) as st, autocast():
                     self.profile_mark_backward_comp_start(i)
                     loss = loss_func(
                         input=cached_output_micro_batches[i], target=target_as_micro_batches[i])
                     if not flag_profile:
                         tr_loss.append(loss.item())
-                    if self.use_fp16:
-                        self.optimizer.scale(loss).backward()
+                    if self.use_fp16 and self.use_dynamic_scale:
+                        self.scaler.scale(loss).backward()
                     else:
                         loss.backward()
                     self.torch_comp_stream.record_event(
                         self.backward_comp_ready_events[i])
+                    
+        if self.pp_rank == self.pipeline_group_size - 1:
+            print('loss: ', sum(tr_loss) / len(tr_loss))
 
         if not flag_profile:
             if self.pp_rank == self.pipeline_group_size - 1:
@@ -579,23 +576,41 @@ class GpipeAsync:
         torch.save(self.model.state_dict(), os.path.join(path, 'pytorch_model.bin'))
         
     def optimizer_step(self):
-        # hard code: grad clipping
-        if not self.use_fp16:
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-        if self.use_dp:
-            with torch.cuda.stream(self.torch_comp_stream):
-                self.torch_comp_stream.record_event(
-                    self.dp_optim.backward_ready_event)
-            self.dp_optim.optimizer_step()
-            self.scheduler.step()
-        else:
-            with torch.cuda.stream(self.torch_comp_stream):
-                if self.enable_tidy_profiling:
-                    self.optimizer_start_event.record()
-                self.optimizer.step()
+        
+        has_nan = False
+        if self.use_fp16 and self.use_dynamic_scale:
+            self.scaler.unscale_(self.optimizer)
+            optimizer_state = self.scaler._per_optimizer_states[id(self.optimizer)]
+            has_nan = sum(v.item() for v in optimizer_state["found_inf_per_device"].values())
+            has_nan = torch.tensor(has_nan, device=self.device, dtype=torch.float32)
+            self.dp_comm.all_reduce(has_nan)
+            has_nan = has_nan.item()
+        
+        if not has_nan:
+            
+            if self.use_dp:
+                with torch.cuda.stream(self.torch_comp_stream):
+                    self.torch_comp_stream.record_event(
+                        self.dp_optim.backward_ready_event)
+                self.dp_optim.optimizer_step()
                 self.scheduler.step()
-                if self.enable_tidy_profiling:
-                    self.optimizer_end_event.record()
+            else:
+                with torch.cuda.stream(self.torch_comp_stream):
+                    
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    
+                    if self.enable_tidy_profiling:
+                        self.optimizer_start_event.record()
+                    self.optimizer.step()
+                    self.scheduler.step()
+                    if self.enable_tidy_profiling:
+                        self.optimizer_end_event.record()
+        else:
+            print('Found nan/inf, skip.')
+                    
+        if self.use_fp16 and self.use_dynamic_scale:
+            self.scaler.update()
+                    
         if self.enable_tidy_profiling:
             self.profiling_optimizer_step()
 
@@ -620,10 +635,12 @@ class GpipeAsync:
                  aux_input_data=None, loss_func=torch.nn.functional.cross_entropy):
         
         
-        if self.use_fp16 and self.use_dynamic_scale:
-            scales_buffer = [torch.ones_like(self.optimizer.grad_scaler._scale) for _ in range(self.pipeline_group_size)]
-            self.comm.all_gather(self.optimizer.grad_scaler._scale, scales_buffer)
-            self.optimizer.grad_scaler._scale.data[:] = min([s.item() for s in scales_buffer])
+        if self.use_fp16 and self.use_dynamic_scale and self.scaler._scale is not None:
+            scales_buffer = [torch.ones_like(self.scaler._scale) for _ in range(self.pipeline_group_size)]
+            self.comm.all_gather(self.scaler._scale, scales_buffer)
+            self.scaler._scale.data[:] = min([s.item() for s in scales_buffer])
+            
+            #print(self.scaler._scale)
         
         self.comm.barrier()
             
@@ -708,7 +725,7 @@ class GpipeAsync:
         for i in range(self.micro_batch_num):
             if self.pipeline_group_size > 1:
                 if self.pp_rank == 0:  # Only send output to next node, do not receive
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         current_micro_output = self.model(
                             self.input_micro_batches[i], 
                             **{k: v[i] for k, v in aux_input_data.items()},
@@ -723,7 +740,7 @@ class GpipeAsync:
                         cupy_recv_stream = cupy.cuda.ExternalStream(self.torch_recv_stream.cuda_stream)
                         self.comm.recv(self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(self.forward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(self.forward_recv_ready_events[i])
                         current_micro_output = self.model(
                             self.input_micro_batches[i], input_ids=input_ids_micro_batches[i],
@@ -736,7 +753,7 @@ class GpipeAsync:
                         cupy_recv_stream = cupy.cuda.ExternalStream(self.torch_recv_stream.cuda_stream)
                         self.comm.recv(self.input_micro_batches[i], src=self.pre_node_rank, stream=cupy_recv_stream)
                         self.torch_recv_stream.record_event(self.forward_recv_ready_events[i])
-                    with torch.cuda.stream(self.torch_comp_stream):
+                    with torch.cuda.stream(self.torch_comp_stream), autocast():
                         self.torch_comp_stream.wait_event(self.forward_recv_ready_events[i])
                         current_micro_output = self.model(
                             self.input_micro_batches[i],
@@ -748,7 +765,7 @@ class GpipeAsync:
                         self.torch_send_stream.wait_event(self.forward_comp_ready_events[i])
                         self.comm.send(current_micro_output.data, dst=self.post_node_rank, stream=cupy_send_stream)
             else:
-                with torch.cuda.stream(self.torch_comp_stream):
+                with torch.cuda.stream(self.torch_comp_stream), autocast():
                     current_micro_output = self.model(
                         self.input_micro_batches[i],
                         **{k: v[i] for k, v in aux_input_data.items()}

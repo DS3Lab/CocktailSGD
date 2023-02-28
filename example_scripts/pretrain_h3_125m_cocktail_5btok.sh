@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=h3-125m-pretrain-pile-ar-5btok-linear-jue-amp
+export WANDB_NAME=h3-125m-pretrain-pile-cocktail-5btok-linear
 # export WANDB_NAME=test
 
 export QUANT_BITS=4
@@ -21,7 +21,7 @@ ARGS="--model-name ./empty_model_configs/h3 \
 --task-name pile \
 --checkpoint-path ./model_ckpts/$WANDB_NAME \
 --num-layers 12 --embedding-dim 768 \
---total-steps 20000 --warmup-steps 200 --train-warmup-steps 2000 \
+--total-steps 20000 --warmup-steps 200 --train-warmup-steps 1000 \
 --checkpoint-steps 500 \
 --evaluation-steps 4000 \
 --evaluation-num-batch 256 \
@@ -30,8 +30,8 @@ ARGS="--model-name ./empty_model_configs/h3 \
 --dist-url tcp://127.0.0.1:7033 \
 --world-size 8 --pipeline-group-size 1 --data-group-size 8 \
 --job-id 0 --net-interface ${netif} \
---dp-backend nccl \
---dp-mode allreduce \
+--dp-backend gloo \
+--dp-mode cocktail_sgd \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \

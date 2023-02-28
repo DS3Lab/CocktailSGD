@@ -120,6 +120,7 @@ class AllReduceDP:
         with torch.cuda.stream(self.torch_optim_comp_stream):
             self.torch_optim_comp_stream.wait_event(self.allreduce_grad_ready_event)
             self.profile_mark_optimizer_step_start()
+            torch.nn.utils.clip_grad_norm_(self.module.parameters(), 1.0)
             self.optimizer.step()
             self.torch_optim_comp_stream.record_event(self.optimizer_step_ready_event)
 
