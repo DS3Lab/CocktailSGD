@@ -87,12 +87,16 @@ def name_to_dataset(task, tokenizer, args):
         elif task == 'cot':
             from .cot import StreamDataset
             dataset = StreamDataset('./data/mmlu-cot.json', tokenizer, args.seq_length)
-        else:
+        elif task.endswith('jsonl'):
             if 'p3' in task:
                 from .p3 import StreamDataset
             else:
                 from .pile import StreamDataset
             data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
+            dataset = StreamDataset(data, tokenizer, args.seq_length)
+        else:
+            from .pile import StreamDataset
+            data = load_dataset(task, split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         
     return dataset
@@ -104,9 +108,13 @@ def name_to_dataset_eval(task, tokenizer, args):
             from .pile import StreamDataset
             data = load_dataset('the_pile', split="validation", streaming=True)
             dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
+        elif task.endswith('jsonl'):
+            from .pile import StreamDataset
+            data = load_dataset("json", data_files=task, split="train", streaming=True) # jsonl file default is "train"
+            dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
         else:
             from .pile import StreamDataset
-            data = load_dataset("json", data_files=task, split="train", streaming=True)
+            data = load_dataset(task, split="validation", streaming=True)
             dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
         
     return dataset
