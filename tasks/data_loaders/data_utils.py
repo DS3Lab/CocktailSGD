@@ -74,7 +74,7 @@ def name_to_dataset(task, tokenizer, args):
         if task == 'natural_instructions' or task == 'ni':
             from .natural_instructions import StreamDataset
             # take in mixture weight file 
-            dataset = StreamDataset('./natural-instructions/', tokenizer, args.mixture_weights_path, args.dev_split_path, args.seq_length)
+            dataset = StreamDataset('./natural-instructions/', tokenizer, args.dev_split_path, args.seq_length, args.mixture_weights_path)
         elif task == 'p3':
             from .p3 import StreamDataset
             data = load_dataset("Muennighoff/P3", split="train").shuffle(seed=args.seed)
@@ -104,9 +104,12 @@ def name_to_dataset_eval(task, tokenizer, args):
             from .pile import StreamDataset
             data = load_dataset('the_pile', split="validation", streaming=True)
             dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
+        elif task == 'natural_instructions' or task == 'ni':
+            from .natural_instructions import StreamEvalDataset, StreamDataset
+            dataset = StreamEvalDataset('./natural-instructions', tokenizer, args.dev_split_path, args.seq_length)
         else:
             from .pile import StreamDataset
-            data = load_dataset("json", data_files=task, split="train", streaming=True)
+            data = load_dataset("json", data_files=task, field="Instances", split="train", streaming=True)
             dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
         
     return dataset
@@ -156,29 +159,20 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
     return train_data_loader
 
 
-def get_eval_data_loader(args, tokenizer, num_workers=1, state_dict=None):
-    
-    task_list = args.task_name.split(',')
-    task_names = []
-    datasets = []
-    probs = []
-    
-    print('data_utils: parse task_list')
-    
+def get_eval_data_loader(args, tokenizer, num_workers=1, state_dict=None):    
+    print('data_utils: load eval data')
     evaluation_data = args.evaluation_data
     
     if evaluation_data is None:
         return None
     
     dataset = name_to_dataset_eval(evaluation_data, tokenizer, args)
-    
-    train_data_loader = torch.utils.data.DataLoader(dataset,
+    eval_data_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=args.batch_size,
                                                     shuffle=False,
                                                     drop_last=True,
                                                     num_workers=num_workers,
                                                     pin_memory=True,
                                                     collate_fn=None)
-    
-    return train_data_loader
+    return eval_data_loader
 

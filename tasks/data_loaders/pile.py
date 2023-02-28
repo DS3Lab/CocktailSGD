@@ -20,7 +20,7 @@ class StreamDataset(IterableDataset):
         self.it = None
         self.iter_count = 0
         self.buffer_tokens = []
-        
+               
     def state_dict(self):
         return {
             'iter_count': self.iter_count,
@@ -36,7 +36,11 @@ class StreamDataset(IterableDataset):
         buffer_tokens = self.buffer_tokens
         for x in self.data:
             self.iter_count += 1
-            curr_tokens = self.tokenizer(self.doc_separator + x['text'])['input_ids']
+            if 'input' in x.keys():
+                context = x['input']
+            else:
+                context = x['text']     
+            curr_tokens = self.tokenizer(self.doc_separator + context)['input_ids']
             buffer_tokens += curr_tokens
             while len(buffer_tokens) >= self.seq_length:
                 tokens = buffer_tokens[:self.seq_length]

@@ -39,14 +39,15 @@ def test_loop(args, pipe, device, test_data_loader):
         
         loss_list = []
         for i, data in enumerate(test_data_loader):
-            
             if args.evaluation_num_batch is not None and i >= args.evaluation_num_batch:
                 break
                 
             input_ids = data['input_ids'].to(device)
             labels = input_ids.clone()
             pipe.infer_iter(input_ids, labels, output_=loss_list, pred_func=_lm_pred_func)
-            
+        
+        if len(loss_list) == 0:
+            raise ValueError("Length of evaluation dataset is too small.")
         loss = torch.tensor(loss_list).mean()
         ppls = torch.exp(loss)
         metric = {"valid.perplexity": ppls.item(), "valid.loss": loss.item()}
@@ -97,7 +98,6 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
     do_sync_before_save = (args.dp_mode in ['local'] and use_dp)
     
     if get_pipeline_parallel_rank() == 0 and dp_rank == 0:
-        
         for i, data in enumerate(train_data_loader):
             if i < pipe.global_step:
                 continue
@@ -144,7 +144,6 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
     elif get_pipeline_parallel_rank() == 0:
         
         while True:
-            
             get_data_parallel_comm().broadcast(stop_flag, 0)
             pp_comm.broadcast(stop_flag, 0)
             if stop_flag.item() == 1:

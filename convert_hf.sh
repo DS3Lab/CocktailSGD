@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # first, create the destination folder 
-RUN_NAME=gpt-neo-1_3b-ni-1-log-perp-temp-2
+#RUN_NAME=gpt-neo-1_3b-ni-1-log-perp-temp-2
 # RUN_NAME=gpt-j-ni-1-uniform
+RUN_NAME=gpt-neo-1_3b-ni-1-uniform
 mkdir -p ./hf/$RUN_NAME
 
 if grep -q "neo" <<< $RUN_NAME; then
