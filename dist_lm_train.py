@@ -18,6 +18,11 @@ from utils.dist_checkpoint_utils import *
 from comm.comm_utils import *
 import compress.flag
 
+from collections import defaultdict
+
+from itertools import chain
+import sys
+
 
 def test_loop(args, pipe, device, test_data_loader):
     
@@ -29,7 +34,6 @@ def test_loop(args, pipe, device, test_data_loader):
     pipe.model.eval()
     
     if get_pipeline_parallel_rank()  == args.pipeline_group_size - 1:
-        
         def _lm_pred_func(x, y):
             loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
             logits = x[:, :-1, :].contiguous().float()
@@ -37,18 +41,47 @@ def test_loop(args, pipe, device, test_data_loader):
             loss = loss_fct(logits.transpose(-1, -2), labels).mean(1).detach().cpu()
             return loss
         
-        loss_list = []
+        loss_dict = defaultdict(list)
+        
+        unique_tasks = set()
         for i, data in enumerate(test_data_loader):
             if args.evaluation_num_batch is not None and i >= args.evaluation_num_batch:
                 break
-                
+                            
             input_ids = data['input_ids'].to(device)
+            if 'task_path' in data:
+                task_paths = data['task_path']
+            else:
+                task_paths = ""
+                print("no task path found in data")
+            # task_paths = data['task_path'] if 'task_path' in data else ""
             labels = input_ids.clone()
-            pipe.infer_iter(input_ids, labels, output_=loss_list, pred_func=_lm_pred_func)
+            
+            # print(f"in eval_loop {i}: {task_paths}")
+            unique_tasks = unique_tasks.union(set(task_paths))
+                        
+            pipe.infer_iter(input_ids, labels, tasks=task_paths, output_=loss_dict, pred_func=_lm_pred_func)
+            print(f"Done with batch {i}.") #Batch size is {input_ids.shape} \n input_ids first row is {input_ids[0]}, first task is {task_paths[0]}, first end text context is {last_text_context if i ==8 else None} \n")
         
-        if len(loss_list) == 0:
-            raise ValueError("Length of evaluation dataset is too small.")
-        loss = torch.tensor(loss_list).mean()
+        #if len(loss_list) == 0:
+        #    raise ValueError("Length of evaluation dataset is too small.")
+        losses = list(loss_dict.values()) # list of lists 
+        losses = list(chain(*losses))
+        
+        print(len(unique_tasks))
+        print(len(loss_dict))
+        original_stdout = sys.stdout # Save a reference to the original standard output
+
+        with open('unique_tasks.txt', 'w') as f:
+            sys.stdout = f # Change the standard output to the file we created.
+            print(f"unique_tasks: {sorted(unique_tasks)}")
+            sys.stdout = original_stdout # Reset the standard output to its original value
+
+
+        
+        loss = torch.tensor(losses).mean()
+        avg_loss_per_task = {k: torch.tensor(v).mean() for (k, v) in loss_dict.items()}
+        avg_ppl_per_task = {k: torch.exp(torch.tensor(v).mean()) for (k, v) in loss_dict.items()}
         ppls = torch.exp(loss)
         metric = {"valid.perplexity": ppls.item(), "valid.loss": loss.item()}
         
@@ -57,6 +90,16 @@ def test_loop(args, pipe, device, test_data_loader):
             metric, 
             step=pipe.global_step,
         )
+        
+        validation_loss = wandb.Artifact("val_loss_" + str(wandb.run.id), type="losses")
+        columns = ["task_path", "average_loss"]
+        val_loss_table = wandb.Table(columns=columns)
+        for task in avg_loss_per_task:
+            val_loss_table.add_data(task, avg_loss_per_task[task])
+            
+            
+        validation_loss.add(val_loss_table, "losses")
+        wandb.run.log_artifact(validation_loss)
         
     else:
         for i, data in enumerate(test_data_loader):
@@ -98,6 +141,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
     do_sync_before_save = (args.dp_mode in ['local'] and use_dp)
     
     if get_pipeline_parallel_rank() == 0 and dp_rank == 0:
+
         for i, data in enumerate(train_data_loader):
             if i < pipe.global_step:
                 continue
@@ -171,7 +215,6 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             
             
     elif get_pipeline_parallel_rank()  == args.pipeline_group_size - 1:
-        
         while True:
             
             pp_comm.broadcast(stop_flag, 0)

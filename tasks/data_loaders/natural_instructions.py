@@ -11,6 +11,7 @@ from comm.comm_utils import *
 import numpy as np
 import pickle 
 from collections import OrderedDict
+import sys
 
 class StreamEvalDataset(IterableDataset):
     default_doc_separator = ''
@@ -63,7 +64,8 @@ class StreamEvalDataset(IterableDataset):
                 continue 
                         
             # only keep dev data for eval
-            #task['Instances'] = [obj for i, obj in enumerate(task['Instances']) if i in self.dev_split[task_name]]
+            task_name = ".".join(task_path.split("/")[-1].split(".")[:-1])
+            task['Instances'] = [obj for i, obj in enumerate(task['Instances']) if i in self.dev_split[task_name]]
             
             for instance in task['Instances']:
                 output_space.add(instance['output'][0])
@@ -86,34 +88,23 @@ class StreamEvalDataset(IterableDataset):
     
     def load_state_dict(self, state_dict):
         self.iter_count = state_dict['iter_count']
-        self.buffer_tokens = state_dict['buffer_tokens']
-        self.data = self.data.skip(self.iter_count)
-      
+        self.buffer_tokens = state_dict['buffer_tokens']      
 
-    def format_instance(self, x, task):
-        is_classification = task['IsClassification']
-        output_space = task['OutputSpace']
-        
+    def format_instance(self, x, task):        
         sample_splitter = random.choice(self.sample_splitters)
-        answer_splitter = random.choice(self.answer_splitters)
-        text_def = random.choice(task['Definition'] + task['Definition'] + [""]).strip()
-        if is_classification and random.random() < 0.5:
-            text_def += '\nPossible labels:'
-            for i, possible_output in enumerate(output_space):
-                text_def += f'\n{i+1}. {possible_output}'
-            text_def += '\n'
-        
+        answer_splitter = random.choice(self.answer_splitters)        
         text_input = random.choice(self.input_prefixs)
         text_output = random.choice(self.output_prefixs)
         
-        return sample_splitter + text_input + x['input'] + answer_splitter + text_output + random.choice(x['output'])
+        return sample_splitter + text_input + x['input'] + answer_splitter + text_output + x['output'][0] # random.choice(x['output'])
 
     def get_task_def(self, task):
         is_classification = task['IsClassification']
         output_space = task['OutputSpace']
         
-        text_def = random.choice(task['Definition'] + task['Definition'] + [""]).strip()
-        if is_classification and random.random() < 0.5:
+        #text_def = random.choice(task['Definition'] + task['Definition'] + [""]).strip()
+        text_def = task['Definition'][0].strip()
+        if is_classification: #and random.random() < 0.5:
             text_def += '\nPossible labels:'
             for i, possible_output in enumerate(output_space):
                 text_def += f'\n{i+1}. {possible_output}'
@@ -122,25 +113,75 @@ class StreamEvalDataset(IterableDataset):
         return text_def
         
     def get_sequence(self):
-        buffer_tokens = self.buffer_tokens
+        # buffer_tokens = self.buffer_tokens  
         
-        task = self.tasks["./natural-instructions/tasks/task512_twitter_emotion_classification.json"]
+        # each sample is constructed so that it always starts with the task definition and then is filled in with individual instances
+        # if a task cannot fit into a sample, it is chunked up into many [task def, instances] samples
+        # there is only one task per sample
+        # if we add instances to a sample until it exceeds the sequence length, we cut it off at the sequence length 
+        # and discard the rest (since the rest might start in the middle of an input or output) 
+        task_set = set()
+        for task_idx, task_path in enumerate(self.tasks):
+            task = self.tasks[task_path]
+            # start with empty buffer so that each sequence of tokens only consists of a single task.
+            buffer_tokens = []
+            for i, x in enumerate(task['Instances']):
+                if i == 0 or buffer_tokens == []:
+                    # add task definition to the beginning of each sequence
+                    task_def = self.get_task_def(task)
+                    text_context = task_def + self.sample_splitters[0] + self.format_instance(x, task)
+                else:
+                    text_context = self.format_instance(x, task)
+                self.iter_count += 1      
+                if i == len(task['Instances']) - 1:
+                    # add padding to the last sample in a task so that we will always exceed sequence length and yield input_ids from the task.
+                    # this is in the case that the task is not 2048 tokens long
+                    curr_tokens = self.tokenizer(self.doc_separator + text_context, padding="max_length")['input_ids']  
+                else:   
+                    curr_tokens = self.tokenizer(self.doc_separator + text_context)['input_ids']
+                buffer_tokens += curr_tokens
+            
+                
+                while len(buffer_tokens) >= self.seq_length:
+                    # should always run due to padding 
+                    tokens = buffer_tokens[:self.seq_length]
+                    #buffer_tokens = buffer_tokens[self.seq_length:]
+                    input_ids = torch.tensor(tokens)
+                    buffer_tokens = [] # just discard the excess no matter how long, because it might be in the middle of a sentence etc. Bad formatting
+                    #self.buffer_tokens = buffer_tokens # update for restore
+                    
+                    task_set = task_set.union(set([task_path]))
+                    
+                    # print(f"in dataloader: {task_path}")
+                    if task_path == "./natural-instructions/tasks/task141_odd-man-out_classification_category.json":
+                        print("hello")
+                    
+                    yield {
+                        'task_path': task_path,
+                        'input_ids': input_ids,
+                        'last_text_context': text_context,
+                    }
+                    
+        original_stdout = sys.stdout # Save a reference to the original standard output
+
+        with open('task_set.txt', 'w') as f:
+            sys.stdout = f # Change the standard output to the file we created.
+            print(f"Done evaluating. task_set is {sorted(task_set)}")       
+            sys.stdout = original_stdout # Reset the standard output to its original value
+
+
         
-        text_context = self.get_task_def(task) 
-        
-        for x in task['Instances']:
-            text_context = self.format_instance(x, task)
-            self.iter_count += 1      
-            curr_tokens = self.tokenizer(self.doc_separator + text_context)['input_ids']
-            buffer_tokens += curr_tokens
-            while len(buffer_tokens) >= self.seq_length:
-                tokens = buffer_tokens[:self.seq_length]
-                buffer_tokens = buffer_tokens[self.seq_length:]
-                input_ids = torch.tensor(tokens)
-                self.buffer_tokens = buffer_tokens # update for restore
-                yield {
-                    'input_ids': input_ids,
-                }
+                   
+             
+        print(f"Done evaluating. task_set is {sorted(task_set)}")       
+            # write whatever is remaining for this task 
+            #input_ids = torch.tensor(buffer_tokens)
+            #buffer_tokens = []
+            #yield {
+            #    'input_ids': input_ids
+            #}
+             
+                    
                 
     def get_stream(self):
         return self.get_sequence()
@@ -148,6 +189,8 @@ class StreamEvalDataset(IterableDataset):
     def __iter__(self):
         if self.it is None:
             self.it = self.get_stream()
+        #for i in range(self.iter_count):
+        #    next(self.it)
             
         return self.it
 
@@ -291,23 +334,19 @@ class StreamDataset(IterableDataset):
         return input_ids
         
     def get_sequence(self):
-        
-        # hardcode a task
-        task = self.tasks["./natural-instructions/tasks/task512_twitter_emotion_classification.json"]
-
         while True:
             # ensure at least 30% classification
-            #if random.random() < 0.3:
-            #    task_idx = np.random.choice(np.arange(len(self.classification_tasks)))
-            #    task = list(self.classification_tasks.items())[task_idx][1]
-            #else:
+            if random.random() < 0.3:
+                task_idx = np.random.choice(np.arange(len(self.classification_tasks)))
+                task = list(self.classification_tasks.items())[task_idx][1]
+            else:
             # select a task with probability proportional to the weights 
-            #    if len(self.mixture_weights) > 0:
-            #        task_idx = np.random.choice(np.arange(len(self.tasks)), p=self.mixture_weights)
-            #        task = list(self.tasks.items())[task_idx][1]
-            #    else:
-            #        task_idx = np.random.choice(np.arange(len(self.tasks)))
-            #        task = list(self.tasks.items())[task_idx][1]
+                if len(self.mixture_weights) > 0:
+                    task_idx = np.random.choice(np.arange(len(self.tasks)), p=self.mixture_weights)
+                    task = list(self.tasks.items())[task_idx][1]
+                else:
+                    task_idx = np.random.choice(np.arange(len(self.tasks)))
+                    task = list(self.tasks.items())[task_idx][1]
                 # we either already have skimmed down the dataset, or we can perform the sampling here...
                 # random.choice(self.tasks, p = the thing we learn!) 
                 

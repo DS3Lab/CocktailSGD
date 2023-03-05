@@ -762,6 +762,7 @@ class GpipeAsync:
         return output_micro_batches
     
     def infer_iter(self, input_=None, target=None, 
+                   tasks=[""],
                    output_=None, 
                    aux_input_data=None, 
                    pred_func=None):
@@ -772,9 +773,10 @@ class GpipeAsync:
                                        aux_input_data=aux_input_data,
                                        labels=target, pred_func=pred_func)
             if output_ is not None:
-                outputs = torch.cat(outputs, 0).mean().item()
-                print(outputs)
-                output_.append(outputs)
+                outputs = torch.cat(outputs, 0)
+                print(f"avg batch loss: {outputs.mean().item()}")
+                for i in range(len(tasks)):
+                    output_[tasks[i]].append(outputs[i].item())
         torch.cuda.synchronize()
         # self.comm.barrier()
 

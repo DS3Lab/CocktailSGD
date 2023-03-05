@@ -3,7 +3,7 @@ export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
 #export WANDB_NAME=gpt-j-ni-1-log-perp-temp-2
 
-export WANDB_NAME=gpt-j-ni-1-uniform
+export WANDB_NAME=gpt-j-ni-42-uniform-default
 
 
 # export QUANT_BITS=4
@@ -17,13 +17,16 @@ ARGS="--model-name /root/fm/models/gpt-j-6B \
 --project-name cocktail-sgd \
 --model-type gptj \
 --optimizer adam \
---seed 1 \
+--seed 42 \
 --load-pretrained-model true \
 --task-name ni \
 --checkpoint-path ./model_ckpts/$WANDB_NAME \
 --num-layers 14 --embedding-dim 4096 \
 --total-steps 3000 --warmup-steps 100 --train-warmup-steps 0 \
 --checkpoint-steps 500 \
+--evaluation-steps 100 \
+--evaluation-data ni \
+--evaluation-num-batch 1 \
 --lr 1e-4 --seq-length 2048 --batch-size 16 --micro-batch-size 1 --gradient-accumulate-step 1 \
 --dist-url tcp://127.0.0.1:7033 \
 --world-size 8 --pipeline-group-size 2 --data-group-size 4 \
@@ -33,8 +36,12 @@ ARGS="--model-name /root/fm/models/gpt-j-6B \
 --dp-mode allreduce \
 --pp-mode gpipe --profiling no-profiling"
 
-
+# changed from 1e-4 to 1e-5
 # CHANGED SEED FROM 42 
+# --evaluation-steps 1 \
+# --evaluation-data ni \
+# --evaluation-num-batch 1 \
+
 
 (trap 'kill 0' SIGINT; \
 python dist_lm_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
