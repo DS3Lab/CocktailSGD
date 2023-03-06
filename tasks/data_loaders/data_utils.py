@@ -74,7 +74,7 @@ def name_to_dataset(task, tokenizer, args):
         if task == 'natural_instructions' or task == 'ni':
             from .natural_instructions import StreamDataset
             # take in mixture weight file 
-            dataset = StreamDataset('./natural-instructions/', tokenizer, args.dev_split_path, args.seq_length, args.mixture_weights_path)
+            dataset = StreamDataset('./natural-instructions/', tokenizer, args.dev_split_path, args.seq_length, args.train_data_no_replace, args.mixture_weights_path)
         elif task == 'p3':
             from .p3 import StreamDataset
             data = load_dataset("Muennighoff/P3", split="train").shuffle(seed=args.seed)

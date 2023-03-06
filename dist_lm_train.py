@@ -70,14 +70,6 @@ def test_loop(args, pipe, device, test_data_loader):
         
         print(len(unique_tasks))
         print(len(loss_dict))
-        original_stdout = sys.stdout # Save a reference to the original standard output
-
-        with open('unique_tasks.txt', 'w') as f:
-            sys.stdout = f # Change the standard output to the file we created.
-            print(f"unique_tasks: {sorted(unique_tasks)}")
-            sys.stdout = original_stdout # Reset the standard output to its original value
-
-
         
         loss = torch.tensor(losses).mean()
         avg_loss_per_task = {k: torch.tensor(v).mean() for (k, v) in loss_dict.items()}
@@ -100,6 +92,8 @@ def test_loop(args, pipe, device, test_data_loader):
             
         validation_loss.add(val_loss_table, "losses")
         wandb.run.log_artifact(validation_loss)
+        
+        # validation_loss.download("./artifacts")
         
     else:
         for i, data in enumerate(test_data_loader):
@@ -280,6 +274,7 @@ def main():
                         help='task name')
     parser.add_argument('--mixture_weights_path', type=str, default=None, help=".pkl file of dictionary mapping from task name to sampling weight.")
     parser.add_argument('--dev_split_path', type=str, default="/root/mayee/dev_split_map.pkl", help=".pkl file of dictionary mapping from task name to sampling weight.")
+    parser.add_argument('--train_data_no_replace', action="store_true", help="Sample without replacement for training dataset")
     parser.add_argument('--warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--train-warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--total-steps', type=int, default=None, help='-')

@@ -10,8 +10,9 @@ from datasets import load_dataset, load_from_disk
 from comm.comm_utils import *
 import numpy as np
 import pickle 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import sys
+
 
 class StreamEvalDataset(IterableDataset):
     default_doc_separator = ''
@@ -162,18 +163,8 @@ class StreamEvalDataset(IterableDataset):
                         'last_text_context': text_context,
                     }
                     
-        original_stdout = sys.stdout # Save a reference to the original standard output
 
-        with open('task_set.txt', 'w') as f:
-            sys.stdout = f # Change the standard output to the file we created.
-            print(f"Done evaluating. task_set is {sorted(task_set)}")       
-            sys.stdout = original_stdout # Reset the standard output to its original value
-
-
-        
-                   
              
-        print(f"Done evaluating. task_set is {sorted(task_set)}")       
             # write whatever is remaining for this task 
             #input_ids = torch.tensor(buffer_tokens)
             #buffer_tokens = []
@@ -197,7 +188,7 @@ class StreamEvalDataset(IterableDataset):
 
 
 class StreamDataset(IterableDataset):
-    def __init__(self, data_path, tokenizer, dev_split_path, seq_length=1024, mixture_weights_path=None, cycling=True, eval=False):
+    def __init__(self, data_path, tokenizer, dev_split_path, seq_length=1024, no_replace=False, mixture_weights_path=None, cycling=True, eval=False):
         self.data_path = data_path
         self.cycling=cycling
         self.eval = eval
@@ -277,6 +268,12 @@ class StreamDataset(IterableDataset):
         
         self.iter_count = 0  
         
+        self.no_replace = no_replace 
+        if self.no_replace:
+            # keep track of instances per task sampled, and tasks whose instances have all been sampled
+            self.samples_so_far = defaultdict(list)
+            self.tasks_so_far = set()
+        
     def state_dict(self):
         return {
             'iter_count': self.iter_count,
@@ -288,7 +285,7 @@ class StreamDataset(IterableDataset):
         except:
             print('cannot load ni states.')
     
-    def sample_text_from_task(self, task):
+    def sample_text_from_task(self, task_path, task):
         
         '''
         Task Definition(*33%)
@@ -321,11 +318,23 @@ class StreamDataset(IterableDataset):
         text_context = text_def
         
         while True:
-            # pick a random instance and do the formatting to add prompt stuff before and after , then tokenize
-            instance = random.choice(task['Instances'])
+            if self.no_replace:
+                    
+                instance_idx = np.random.choice(np.setdiff1d(np.arange(len(task['Instances'])), np.array(self.samples_so_far[task_path])))
+                instance = task['Instances'][instance_idx]
+                self.samples_so_far[task_path].append(instance_idx)
+            else:
+                instance = random.choice(task['Instances'])
             text_context += sample_splitter + text_input + instance['input'] + answer_splitter + text_output + random.choice(instance['output'])
-            input_ids = self.tokenizer(text_context.strip())['input_ids']
-            if len(input_ids) > self.seq_length:
+            
+            if self.no_replace and set(np.arange(len(task['Instances']))) == set(self.samples_so_far[task_path]):
+                # if we have now sampled all instances in a task
+                input_ids = self.tokenizer(text_context.strip(), padding="max_length")['input_ids']
+                self.tasks_so_far.add(task_path)
+                self.samples_so_far[task_path] = [] # reset this cache. Basically, we want to ensure that all samples are picked before we duplicate them
+            else:
+                input_ids = self.tokenizer(text_context.strip())['input_ids']
+            if len(input_ids) >= self.seq_length:
                 break
                 
         input_ids = input_ids[:self.seq_length]
@@ -337,23 +346,41 @@ class StreamDataset(IterableDataset):
         while True:
             # ensure at least 30% classification
             if random.random() < 0.3:
-                task_idx = np.random.choice(np.arange(len(self.classification_tasks)))
-                task = list(self.classification_tasks.items())[task_idx][1]
+                if self.no_replace:
+                    remaining_classification_tasks = set(list(self.classification_tasks.keys())).difference(self.tasks_so_far)
+                    if len(remaining_classification_tasks) == 0:
+                        continue # no more classification tasks, sample from entire set of tasks
+                
+                    task_path = np.random.choice(np.array(list(remaining_classification_tasks)))
+                    task = self.classification_tasks[task_path]
+                else:
+                    task_idx = np.random.choice(np.arange(len(self.classification_tasks)))
+                    task_path, task = list(self.classification_tasks.items())[task_idx]
             else:
             # select a task with probability proportional to the weights 
                 if len(self.mixture_weights) > 0:
                     task_idx = np.random.choice(np.arange(len(self.tasks)), p=self.mixture_weights)
-                    task = list(self.tasks.items())[task_idx][1]
+                    task_path, task = list(self.tasks.items())[task_idx]
                 else:
-                    task_idx = np.random.choice(np.arange(len(self.tasks)))
-                    task = list(self.tasks.items())[task_idx][1]
+                    if self.no_replace:
+                        remaining_tasks = set(list(self.tasks.keys()))
+                        
+                        # commented this part so that we can sample more uniformly from rare tasks 
+                        #remaining_tasks = set(list(self.tasks.keys())).difference(self.tasks_so_far)
+                        #if len(remaining_tasks) == 0:
+                        #    print("natural_instructions: done cycling through all the tasks and instances in dataset. Resetting...")
+
+                        task_path = np.random.choice(np.array(list(remaining_tasks)))
+                        task = self.tasks[task_path]
+                    else:
+                        task_idx = np.random.choice(np.arange(len(self.tasks)))
+                        task_path, task = list(self.tasks.items())[task_idx]
                 # we either already have skimmed down the dataset, or we can perform the sampling here...
                 # random.choice(self.tasks, p = the thing we learn!) 
                 
-                
 
             # then pick a random sample from that task. Note that we have already removed the dev data from the task.
-            input_ids = self.sample_text_from_task(task)
+            input_ids = self.sample_text_from_task(task_path, task)
 
             self.iter_count += 1
             
