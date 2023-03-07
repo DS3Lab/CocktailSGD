@@ -152,18 +152,12 @@ class StreamEvalDataset(IterableDataset):
                     #self.buffer_tokens = buffer_tokens # update for restore
                     
                     task_set = task_set.union(set([task_path]))
-                    
-                    # print(f"in dataloader: {task_path}")
-                    if task_path == "./natural-instructions/tasks/task141_odd-man-out_classification_category.json":
-                        print("hello")
-                    
+                                        
                     yield {
                         'task_path': task_path,
                         'input_ids': input_ids,
                         'last_text_context': text_context,
                     }
-                    
-
              
             # write whatever is remaining for this task 
             #input_ids = torch.tensor(buffer_tokens)
