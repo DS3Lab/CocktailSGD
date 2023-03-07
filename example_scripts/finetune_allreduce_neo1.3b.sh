@@ -1,7 +1,7 @@
 netif=lo
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=gpt-neo-1_3b-ni-2-uniform-moredebug
+export WANDB_NAME=gpt-neo-1_3b-ni-2-uniform-no_replacement_cycling2
 # export WANDB_NAME=gpt-neo-1_3b-ni-1-log-perp-temp-2
 
 export QUANT_BITS=4
@@ -18,11 +18,12 @@ ARGS="--model-name /root/fm/models/gpt-neo-1.3b-new \
 --seed 2 \
 --load-pretrained-model true \
 --task-name ni \
+--train_data_no_replace \
 --checkpoint-path ./model_ckpts/$WANDB_NAME \
 --num-layers 12 --embedding-dim 2048 \
 --total-steps 1000 --warmup-steps 10 --train-warmup-steps 0 \
---checkpoint-steps 2000 \
---evaluation-steps 100 \
+--checkpoint-steps 1000 \
+--evaluation-steps 50 \
 --evaluation-data ni \
 --lr 1e-4 --seq-length 2048 --batch-size 16 --micro-batch-size 2 --gradient-accumulate-step 1 \
 --dist-url tcp://127.0.0.1:7033 \
