@@ -113,7 +113,7 @@ if __name__ == '__main__':
     
     if args.prefix_lm:
         for layer in model.transformer.h:
-            layer.attn.bias[:] = 0.
+            layer.attn.bias[:] = 1.
     
     model.save_pretrained(args.save_path)
     config.save_pretrained(args.save_path)
