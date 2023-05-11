@@ -11,10 +11,25 @@ from datasets import load_dataset, load_from_disk
 from comm.comm_utils import *
 
 
-from itertools import islice
+from itertools import islice, chain
+from functools import partial
 from random import randint
 
 SHOW_DATA = int(os.environ.get('SHOW_DATA', 1))
+
+
+def tokenize_and_pack(examples, tokenizer, seq_length=2048):
+    examples = tokenizer(examples["text"])
+    concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+    total_length = len(concatenated_examples[list(examples.keys())[0]])
+    if total_length >= seq_length:
+        total_length = (total_length // seq_length) * seq_length
+        
+    result = {
+        k: torch.tensor([t[i : i + seq_length] for i in range(0, total_length, seq_length)])
+        for k, t in concatenated_examples.items()
+    }
+    return result
 
 
 class StreamDatasetList(IterableDataset):
@@ -37,7 +52,9 @@ class StreamDatasetList(IterableDataset):
         
     def get_sequence(self):
         
-        iterators = [cycle(d.get_sequence()) for d in self.datasets]
+        iterators = [(
+            cycle(d.get_sequence()) if hasattr(d, 'get_sequence') else iter(d)
+        ) for d in self.datasets]
         prob_ths = np.cumsum([p / sum(self.sample_probs) for p in self.sample_probs])
         
         global_i = 0
@@ -81,12 +98,26 @@ def name_to_dataset(task, tokenizer, args):
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'pile':
             from .pile import StreamDataset
-            data = load_dataset('the_pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
-            # data = load_dataset('the_pile', split="train").shuffle(seed=args.seed)
+            data = load_dataset('EleutherAI/pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
+            # data = load_dataset('EleutherAI/pile', split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'cot':
             from .cot import StreamDataset
             dataset = StreamDataset('./data/mmlu-cot.json', tokenizer, args.seq_length)
+        elif task == 'rp_common_crawl':
+            _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
+            data = load_dataset("json", data_files=f"/root/data/common_crawl/2019-30/*.jsonl.zst", split="train", streaming=True)
+            data = data.shuffle(buffer_size=100_000, seed=args.seed)
+            dataset = data.map(
+                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
+            ).with_format("torch")
+        elif task.startswith('rp_'):
+            _, _split = task.split('_')
+            _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
+            data = load_dataset("json", data_files=f"/root/data/{_split}/*.jsonl", split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
+            dataset = data.map(
+                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'meta']
+            ).with_format("torch")
         elif task.endswith('jsonl'):
             if 'p3' in task:
                 from .p3 import StreamDataset
@@ -106,7 +137,7 @@ def name_to_dataset_eval(task, tokenizer, args):
     if task != '':
         if task == 'pile':
             from .pile import StreamDataset
-            data = load_dataset('the_pile', split="validation", streaming=True)
+            data = load_dataset('EleutherAI/pile', split="validation", streaming=True)
             dataset = StreamDataset(data, tokenizer, args.seq_length, cycling=False)
         elif task.endswith('jsonl'):
             from .pile import StreamDataset

@@ -140,6 +140,9 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             
             if pipe.global_step >= args.total_steps:
                 stop_flag.data[:] = 1
+                
+            if pipe.global_step >= args.stop_steps:
+                stop_flag.data[:] = 1
             
     elif get_pipeline_parallel_rank() == 0:
         
@@ -239,6 +242,7 @@ def main():
     parser.add_argument('--warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--train-warmup-steps', type=int, default=0, help='-')
     parser.add_argument('--total-steps', type=int, default=None, help='-')
+    parser.add_argument('--stop-steps', type=int, default=None, help='-')
     parser.add_argument('--total-scheduler-steps', type=int, default=None, help='-')
     parser.add_argument('--scheduler', type=str, default='linear')
     parser.add_argument('--load-pretrained-model', 

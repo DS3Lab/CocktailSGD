@@ -83,6 +83,8 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         output_attentions=False,
     ):
         has_layer_past = layer_past is not None
+        
+        bsz, tgt_len, _ = hidden_states.shape
 
         # Compute QKV
         # Attention heads [batch, seq_len, hidden_size]
