@@ -151,7 +151,7 @@ def name_to_dataset_eval(task, tokenizer, args):
     return dataset
 
     
-def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
+def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None, is_shard_data_loader=False):
     
     task_list = args.task_name.split(',')
     task_names = []
@@ -183,12 +183,22 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
     if state_dict is not None:
         stream_dataset.load_state_dict(state_dict)
     
-    train_data_loader = torch.utils.data.DataLoader(stream_dataset,
-                                                    batch_size=args.batch_size * args.data_group_size,
-                                                    shuffle=False,
-                                                    num_workers=num_workers,
-                                                    pin_memory=True,
-                                                    collate_fn=None)
+    if is_shard_data_loader:
+        train_data_loader = torch.utils.data.DataLoader(
+            stream_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=None)
+    else:
+        train_data_loader = torch.utils.data.DataLoader(
+            stream_dataset,
+            batch_size=args.batch_size * args.data_group_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=None)
     
     print('data_utils: get train_data_loader')
     
