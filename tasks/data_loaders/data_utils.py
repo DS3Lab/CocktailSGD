@@ -14,6 +14,7 @@ from comm.comm_utils import *
 from itertools import islice, chain
 from functools import partial
 from random import randint
+from random import shuffle
 
 SHOW_DATA = int(os.environ.get('SHOW_DATA', 1))
 RP_PREFIX = os.environ.get('RP_PREFIX', '/root/data')
@@ -25,9 +26,16 @@ def tokenize_and_pack(examples, tokenizer, seq_length=2048):
     if total_length >= seq_length:
         total_length = (total_length // seq_length) * seq_length
         
+    # result = {
+    #     k: torch.tensor([t[i : i + seq_length] for i in range(0, total_length, seq_length)])
+    #     for k, t in concatenated_examples.items()
+    # }
+    t = concatenated_examples['input_ids']
+    t = [t[i : i + seq_length] for i in range(0, total_length, seq_length)]
+    t = shuffle(t)
+    t = torch.tensor(t)
     result = {
-        k: torch.tensor([t[i : i + seq_length] for i in range(0, total_length, seq_length)])
-        for k, t in concatenated_examples.items()
+        'input_ids': t,
     }
     return result
 
@@ -113,19 +121,19 @@ def name_to_dataset(task, tokenizer, args):
             data = load_dataset("json", data_files=os.path.join(
                 RP_PREFIX, 
                 f"common_crawl/*.jsonl"), split="train", streaming=True)
-            # data = data.shuffle(buffer_size=1_000, seed=args.seed)
+            data = data.shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
                 _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
-            ).shuffle(buffer_size=100_000, seed=args.seed).with_format("torch")
+            ).with_format("torch")
         elif task.startswith('rp_'):
             _split = task[3:]
             _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
             data = load_dataset("json", data_files=os.path.join(
                 RP_PREFIX,
-                f"{_split}/*.jsonl"), split="train", streaming=True)
+                f"{_split}/*.jsonl"), split="train", streaming=True).shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
                 _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'meta']
-            ).shuffle(buffer_size=100_000, seed=args.seed).with_format("torch")
+            ).with_format("torch")
         elif task.endswith('jsonl'):
             if 'p3' in task:
                 from .p3 import StreamDataset
