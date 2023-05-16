@@ -8,11 +8,10 @@ template = '''#!/bin/bash
 #SBATCH --output=/work/logs/slurm_%j.log
 #SBATCH --exclusive
 
-cd $HOME
-rm -rf CocktailSGD
-git clone https://github.com/DS3Lab/CocktailSGD.git
-cd ~/CocktailSGD
-git checkout rp
+#rm -rf CocktailSGD
+#git clone https://github.com/DS3Lab/CocktailSGD.git
+#cd ~/CocktailSGD
+#git checkout rp
 
 ls -l
 sleep 60
@@ -30,7 +29,7 @@ if __name__ == '__main__':
     pp_degree=2
     dp_degree=128
     n_layer_per_device=16
-    world_size = pp_degree * dp_degree
+    node_size = 32
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
@@ -40,5 +39,5 @@ if __name__ == '__main__':
     with open('slurm_scripts/train_to_submit.slurm.sh', 'w') as f:
         f.write(template)
         
-    for i in range(world_size):
+    for i in range(node_size):
         os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
