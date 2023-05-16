@@ -32,7 +32,7 @@ def tokenize_and_pack(examples, tokenizer, seq_length=2048):
     # }
     t = concatenated_examples['input_ids']
     t = [t[i : i + seq_length] for i in range(0, total_length, seq_length)]
-    t = shuffle(t)
+    shuffle(t)
     t = torch.tensor(t)
     result = {
         'input_ids': t,
