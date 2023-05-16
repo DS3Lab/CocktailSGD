@@ -52,7 +52,7 @@ rp_wikipedia:0.04 \
 --total-steps 238418 --warmup-steps 100 --train-warmup-steps 0 \
 --stop-steps 238419 \
 --checkpoint-steps 100 \
---lr 1e-5 --seq-length 2048 --batch-size 8 --micro-batch-size 1 --gradient-accumulate-step 2 \
+--lr 1e-5 --seq-length 2048 --batch-size 32 --micro-batch-size 1 --gradient-accumulate-step 1 \
 --dist-url tcp://${master_ip}:7026 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
@@ -65,19 +65,19 @@ rp_wikipedia:0.04 \
 RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
     & \
 RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
-    & sleep 0.5 & \
+    & \
 RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
     & \
 RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
-    & sleep 0.5 & \
+    & sleep 1 & \
 RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
     & \
 RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
-    & sleep 0.5 & \
+    & \
 RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
     & \
 RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
-    & sleep 0.5 & \
+    & sleep 1 & \
 wait)
 
 
@@ -86,9 +86,9 @@ wait)
 if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
-    pp_degree=2
-    dp_degree=128
-    n_layer_per_device=16
+    pp_degree=4
+    dp_degree=64
+    n_layer_per_device=8
     node_size=32
 
     template = template.replace('{{JOB_ID}}', job_id)
