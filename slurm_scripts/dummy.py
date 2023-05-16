@@ -8,10 +8,11 @@ template = '''#!/bin/bash
 #SBATCH --output=/work/logs/slurm_%j.log
 #SBATCH --exclusive
 
-#rm -rf CocktailSGD
-#git clone https://github.com/DS3Lab/CocktailSGD.git
-#cd ~/CocktailSGD
-#git checkout rp
+cd /root/
+rm -rf CocktailSGD
+git clone https://github.com/DS3Lab/CocktailSGD.git
+cd CocktailSGD
+git checkout rp
 
 ls -l
 sleep 60
