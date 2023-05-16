@@ -9,6 +9,8 @@ from modules.utils import gpt_loss_func
 from modules.tokenizer import build_tokenizer
 from pipeline_parallel.dist_pp_utils import get_pp_module
 
+from coordinator.http_coordinate_client import get_coordinator_client, init_coordinator_client
+
 from transformers import AutoConfig, PretrainedConfig
 import datasets
 
@@ -242,6 +244,19 @@ def main():
         device = torch.device('cpu')
     
     print(device)
+    
+    init_coordinator_client(args, None)
+    coord_client = get_coordinator_client()
+    res = coord_client.notify_inference_join(args.net_interface)
+    prime_ip = res['prime_ip']
+    rank = res['rank']
+    port = res['nccl_port']
+
+    print(f"job id: {args.job_id}")
+    print("<====Coordinator assigned prime-IP:", prime_ip, " and my assigned rank", rank, "====>")
+    
+    args.dist_url = f"tcp://{prime_ip}:{port}"
+    args.rank = rank
         
     init_communicators(args)
     
