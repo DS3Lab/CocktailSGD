@@ -116,7 +116,7 @@ def name_to_dataset(task, tokenizer, args):
             # data = data.shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
                 _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
-            ).shuffle(buffer_size=1000_000, seed=args.seed).with_format("torch")
+            ).shuffle(buffer_size=100_000, seed=args.seed).with_format("torch")
         elif task.startswith('rp_'):
             _split = task[3:]
             _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
@@ -125,7 +125,7 @@ def name_to_dataset(task, tokenizer, args):
                 f"{_split}/*.jsonl"), split="train", streaming=True)
             dataset = data.map(
                 _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'meta']
-            ).shuffle(buffer_size=1000_000, seed=args.seed).with_format("torch")
+            ).shuffle(buffer_size=100_000, seed=args.seed).with_format("torch")
         elif task.endswith('jsonl'):
             if 'p3' in task:
                 from .p3 import StreamDataset
