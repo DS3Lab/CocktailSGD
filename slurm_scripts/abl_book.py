@@ -24,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-arxiv
+export WANDB_NAME=RP-7B-700BT-book
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -37,15 +37,7 @@ ARGS="--model-name /work/data/_root_fm_models_rp_700b_real_fp16 \
 --model-type flash_gptneox \
 --optimizer adam \
 --seed 42 \
---task-name \
-rp_arxiv:0.052,\
-rp_book:0.03,\
-rp_c4:0.460,\
-rp_common_crawl:0.26,\
-rp_github_no_markdown:0.1,\
-rp_github_md:0.035,\
-rp_stackexchange:0.014,\
-rp_wikipedia:0.04 \
+--task-name rp_book:0.03 \
 --checkpoint-path /work/data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 512 \
