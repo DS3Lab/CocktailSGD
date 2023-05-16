@@ -5,9 +5,6 @@ import uuid
 template = '''#!/bin/bash
 #SBATCH --job-name=dummy
 #SBATCH --time=9:59:00
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem-per-cpu=8G
 #SBATCH --output=/work/logs/slurm_%j.log
 
 cd $HOME     # Change directory
