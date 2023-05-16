@@ -24,9 +24,13 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5
+export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5-cocktail
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
+
+export QUANT_BITS=4
+export TOPK_RATIO=0.2
+export RANDOMP_RATIO=0.1
 
 export SHOW_DATA=0
 
@@ -52,7 +56,7 @@ rp_wikipedia:0.04 \
 --total-steps 238418 --warmup-steps 100 --train-warmup-steps 0 \
 --stop-steps 238419 \
 --checkpoint-steps 100 \
---lr 1e-5 --seq-length 2048 --batch-size 16 --micro-batch-size 1 --gradient-accumulate-step 1 \
+--lr 1e-5 --seq-length 2048 --batch-size 8 --micro-batch-size 1 --gradient-accumulate-step 2 \
 --dist-url tcp://${master_ip}:7026 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
