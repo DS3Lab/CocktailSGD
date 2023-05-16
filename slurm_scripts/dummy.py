@@ -91,9 +91,9 @@ if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
     pp_degree=2
-    dp_degree=128
+    dp_degree=4
     n_layer_per_device=16
-    node_size = 32
+    node_size = 1
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
