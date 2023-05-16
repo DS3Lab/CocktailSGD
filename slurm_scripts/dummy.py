@@ -3,12 +3,11 @@ import os
 import uuid
 
 template = '''#!/bin/bash
-#SBATCH --job-name=opt_1.3b
-#SBATCH --gpus=1 
-#SBATCH --gres=gpumem:20g
+#SBATCH --job-name=dummy
+#SBATCH --gpus=8
 #SBATCH --time=9:59:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=64
 #SBATCH --mem-per-cpu=8G
 #SBATCH --output=/work/logs/slurm_%j.log
 
