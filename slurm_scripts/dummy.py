@@ -3,17 +3,6 @@ import os
 import uuid
 import time
 
-'''
-rp_arxiv:0.052,\
-rp_book:0.03,\
-rp_c4:0.460,\
-rp_common_crawl:0.26,\
-rp_github_no_markdown:0.1,\
-rp_github_md:0.035,\
-rp_stackexchange:0.014,\
-rp_wikipedia:0.04 \
-'''
-
 template = '''#!/bin/bash
 #SBATCH --job-name=dummy
 #SBATCH --time=999:59:00
@@ -35,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-debug
+export WANDB_NAME=RP-7B-700BT-restart
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -49,7 +38,14 @@ ARGS="--model-name /work/data/_root_fm_models_rp_700b_real_fp16 \
 --optimizer adam \
 --seed 42 \
 --task-name \
-rp_arxiv:0.052 \
+rp_arxiv:0.052,\
+rp_book:0.03,\
+rp_c4:0.460,\
+rp_common_crawl:0.26,\
+rp_github_no_markdown:0.1,\
+rp_github_md:0.035,\
+rp_stackexchange:0.014,\
+rp_wikipedia:0.04 \
 --checkpoint-path /work/data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 512 \
@@ -66,21 +62,21 @@ rp_arxiv:0.052 \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
+RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
+RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
+RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
+RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
+RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
+RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
+RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
+RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
     & \
 wait)
 
@@ -93,7 +89,7 @@ if __name__ == '__main__':
     pp_degree=2
     dp_degree=4
     n_layer_per_device=16
-    node_size = 1
+    node_size = 128
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
