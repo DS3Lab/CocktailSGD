@@ -18,6 +18,7 @@ from transformers.models.gpt_neox.modeling_gpt_neox import RotaryEmbedding
 
 try:
     from flash_attn.flash_attention import FlashAttention
+    from flash_attn.ops.fused_dense import fused_dense_gelu_dense_func
     flash_attn_installed = True
     print('>>>>> flash attention')
 except ImportError:
@@ -265,13 +266,29 @@ class GPTBlock(_GPTNeoXBlock):
             if self.config.use_parallel_residual:
                 # x = x + attn(ln1(x)) + mlp(ln2(x))
                 # x_a = attn_output, 
-                mlp_out = self.mlp(self.post_attention_layernorm(x))
+                # mlp_out = self.mlp(self.post_attention_layernorm(x))
+                hidden_states = self.post_attention_layernorm(x)
+                mlp_out = fused_dense_gelu_dense_func(
+                    hidden_states,
+                    self.mlp.dense_h_to_4h.weight, self.mlp.dense_4h_to_h.weight,
+                    self.mlp.dense_h_to_4h.bias, self.mlp.dense_4h_to_h.bias,
+                    save_pre_act=False,
+                    return_residual=False
+                )
                 return res + attn_output + mlp_out
             else:
                 # x = x + attn(ln1(x)) 
                 # x = x + mlp(ln2(x))
                 attn_output = attn_output + x
-                mlp_out = self.mlp(self.post_attention_layernorm(attn_output))
+                # mlp_out = self.mlp(self.post_attention_layernorm(attn_output))
+                hidden_states = self.post_attention_layernorm(attn_output)
+                mlp_out = fused_dense_gelu_dense_func(
+                    hidden_states,
+                    self.mlp.dense_h_to_4h.weight, self.mlp.dense_4h_to_h.weight,
+                    self.mlp.dense_h_to_4h.bias, self.mlp.dense_4h_to_h.bias,
+                    save_pre_act=False,
+                    return_residual=False
+                )
                 return attn_output + mlp_out
 
         self.block_forward = block_forward
