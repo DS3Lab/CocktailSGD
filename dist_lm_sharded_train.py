@@ -122,7 +122,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
-                save_checkpoint(pipe, args, individual_dp_ckpt=True)
+                save_checkpoint(pipe, args, individual_dp_ckpt=False)
                 if do_sync_before_save:
                     pipe.dp_optim.rollback_parameters()
             
@@ -151,7 +151,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
-                save_checkpoint(pipe, args, individual_dp_ckpt=True)
+                save_checkpoint(pipe, args, individual_dp_ckpt=False)
                 pipe.save_on_disk(args.checkpoint_path)
                 if do_sync_before_save:
                     pipe.dp_optim.rollback_parameters()
@@ -170,7 +170,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             if pipe.global_step % args.checkpoint_steps == 0:
                 if do_sync_before_save:
                     pipe.dp_optim.allreduce_parameters()
-                save_checkpoint(pipe, args, individual_dp_ckpt=True)
+                save_checkpoint(pipe, args, individual_dp_ckpt=False)
                 if do_sync_before_save:
                     pipe.dp_optim.rollback_parameters()
         
@@ -240,6 +240,8 @@ def main():
         device = torch.device('cuda', args.cuda_id)
     else:
         device = torch.device('cpu')
+    
+    print(device)
         
     init_communicators(args)
     
