@@ -106,5 +106,6 @@ if __name__ == '__main__':
         f.write(template)
         
     for i in range(node_size):
-        time.sleep(10)
+        if i == 0:
+            time.sleep(10)
         os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
