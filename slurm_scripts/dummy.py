@@ -40,8 +40,8 @@ export WANDB_ENTITY=asdfffjj
 
 export SHOW_DATA=0
 
-ARGS="--model-name /work/data/data/_root_fm_models_rp_700b_real_fp16 \
---tokenizer-name /work/data/data/_root_fm_models_rp_700b_real_fp16 \
+ARGS="--model-name /work/data/_root_fm_models_rp_700b_real_fp16 \
+--tokenizer-name /work/data/_root_fm_models_rp_700b_real_fp16 \
 --load-pretrained-model true \
 --project-name redpajama \
 --model-type flash_gptneox \
@@ -106,6 +106,6 @@ if __name__ == '__main__':
         f.write(template)
         
     for i in range(node_size):
+        os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
         if i == 0:
             time.sleep(10)
-        os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
