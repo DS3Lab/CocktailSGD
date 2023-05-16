@@ -4,7 +4,7 @@ import uuid
 import time
 
 template = '''#!/bin/bash
-#SBATCH --job-name=dummy
+#SBATCH --job-name=bzs_4m_lr_1e5
 #SBATCH --time=999:59:00
 #SBATCH --output=/work/logs/slurm_%j.log
 #SBATCH --exclusive
@@ -24,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-restart
+export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -51,8 +51,8 @@ rp_wikipedia:0.04 \
 --initial-loss-scale 512 \
 --total-steps 238418 --warmup-steps 100 --train-warmup-steps 0 \
 --stop-steps 238419 \
---checkpoint-steps 500 \
---lr 6e-5 --seq-length 2048 --batch-size 16 --micro-batch-size 1 --gradient-accumulate-step 8 \
+--checkpoint-steps 100 \
+--lr 1e-5 --seq-length 2048 --batch-size 16 --micro-batch-size 1 --gradient-accumulate-step 1 \
 --dist-url tcp://${master_ip}:7026 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
