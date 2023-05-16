@@ -34,8 +34,8 @@ if __name__ == '__main__':
     template = template.replace('{{DP_DEGREE}}', str(dp_degree))
     template = template.replace('{{N_LAYER_PER_DEVICE}}', str(n_layer_per_device))
 
-    with open('slurm_scrips/train_to_submit.slurm.sh', 'w') as f:
+    with open('slurm_scripts/train_to_submit.slurm.sh', 'w') as f:
         f.write(template)
         
     for i in range(world_size):
-        os.system('sbatch slurm_scrips/train_to_submit.slurm.sh')
+        os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
