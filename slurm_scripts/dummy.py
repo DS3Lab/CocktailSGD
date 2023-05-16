@@ -4,10 +4,18 @@ import uuid
 
 template = '''#!/bin/bash
 #SBATCH --job-name=dummy
-#SBATCH --time=9:59:00
+#SBATCH --time=999:59:00
 #SBATCH --output=/work/logs/slurm_%j.log
+#SBATCH --exclusive
 
-cd $HOME     # Change directory
+cd $HOME
+rm -rf CocktailSGD
+git clone https://github.com/DS3Lab/CocktailSGD.git
+cd ~/CocktailSGD
+git checkout rp
+
+ls -l
+sleep 60
 
 nvidia-smi
 
