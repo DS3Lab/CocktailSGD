@@ -49,7 +49,7 @@ rp_wikipedia:0.04 \
 --checkpoint-path /work/data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 512 \
---total-steps 238418 --warmup-steps 100 --train-warmup-steps 0 \
+--total-steps 238418 --warmup-steps 10 --train-warmup-steps 0 \
 --stop-steps 238419 \
 --checkpoint-steps 100 \
 --lr 1e-5 --seq-length 2048 --batch-size 32 --micro-batch-size 1 --gradient-accumulate-step 1 \
