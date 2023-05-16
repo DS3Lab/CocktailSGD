@@ -4,7 +4,6 @@ import uuid
 
 template = '''#!/bin/bash
 #SBATCH --job-name=dummy
-#SBATCH --gpus=8
 #SBATCH --time=9:59:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
