@@ -37,6 +37,7 @@ export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
 export WANDB_NAME=RP-7B-700BT-debug
 export WANDB_ENTITY=asdfffjj
+export WANDB_DISABLED=1
 
 export SHOW_DATA=0
 
@@ -65,21 +66,21 @@ rp_arxiv:0.052 \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
     & \
-WANDB_DISABLED=1 RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
+RP_PREFIX=/work/data/data_samples python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
     & \
 wait)
 
@@ -87,9 +88,6 @@ wait)
 '''
 
 if __name__ == '__main__':
-
-    # with open('slurms_scrips/train_template.lsf.sh') as f:
-    #     template = f.read()
 
     job_id = str(uuid.uuid4())
     pp_degree=2
