@@ -105,4 +105,4 @@ if __name__ == '__main__':
         
     for i in range(node_size):
         os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
-        time.sleep(3)
+        time.sleep(6)
