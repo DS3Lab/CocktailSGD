@@ -123,7 +123,7 @@ def name_to_dataset(task, tokenizer, args):
                 f"common_crawl/*.jsonl"), split="train", streaming=True)
             data = data.shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
-                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
+                _tokenize_and_pack, batched=True, batch_size=64, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
             ).with_format("torch")
         elif task.startswith('rp_'):
             _split = task[3:]
@@ -132,7 +132,7 @@ def name_to_dataset(task, tokenizer, args):
                 RP_PREFIX,
                 f"{_split}/*.jsonl"), split="train", streaming=True).shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
-                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'meta']
+                _tokenize_and_pack, batched=True, batch_size=64, remove_columns= ['text', 'meta']
             ).with_format("torch")
         elif task.endswith('jsonl'):
             if 'p3' in task:
