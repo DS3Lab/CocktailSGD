@@ -24,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5-cocktail
+export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5-cocktail-fix
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
