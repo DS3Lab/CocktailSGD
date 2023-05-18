@@ -24,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5-cocktail-fix
+export WANDB_NAME=RP-7B-700BT-bzs4m_lr1e-5-cocktail-fix2
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -91,9 +91,9 @@ if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
     pp_degree=4
-    dp_degree=64
+    dp_degree=56
     n_layer_per_device=8
-    node_size=32
+    node_size=28
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
