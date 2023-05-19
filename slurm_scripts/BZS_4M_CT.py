@@ -57,7 +57,7 @@ rp_wikipedia:0.1 \
 --stop-steps 238419 \
 --checkpoint-steps 1000 \
 --lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 1 \
---dist-url tcp://${master_ip}:7026 \
+--dist-url tcp://${master_ip}:8916 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
 --fp16 \
