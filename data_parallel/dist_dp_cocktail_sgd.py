@@ -466,11 +466,13 @@ class CocktailSGDDP:
                 self.dp_comm_stream.record_event(self.sync_gradients_ready_event)
                 
     def _try_partial_sync(self):
-        try:
-            self._partial_sync()
-        except Exception as e:
-            print('*****ERR*****', e)
-            self.flag_dp_exception = 1
+        self._partial_sync()
+#         try:
+#             self._partial_sync()
+#         except Exception as e:
+#             print('*****ERR*****')
+#             print(e)
+#             self.flag_dp_exception = 1
 
     def pre_optimizer_step(self):
         if not flag.FLAG_DISABLE_COMPRESSION:
