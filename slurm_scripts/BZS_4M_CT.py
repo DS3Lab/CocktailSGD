@@ -24,7 +24,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-bzs8m_lr1e-5-cocktail-mbsz2
+export WANDB_NAME=RP-7B-700BT-neomix-bzs6m_lr1e-5-cocktail-mbsz2
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -44,19 +44,19 @@ ARGS="--model-name /work/data/_root_fm_models_rp_700b_real_fp16 \
 --task-name \
 rp_arxiv:0.052,\
 rp_book:0.03,\
-rp_c4:0.460,\
-rp_common_crawl:0.26,\
-rp_github_no_markdown:0.1,\
-rp_github_md:0.035,\
-rp_stackexchange:0.014,\
-rp_wikipedia:0.04 \
+rp_c4:0.63,\
+rp_common_crawl:0.035,\
+rp_github_no_markdown:0.075,\
+rp_github_md:0.025,\
+rp_stackexchange:0.1,\
+rp_wikipedia: 0.1 \
 --checkpoint-path /work/data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 512 \
 --total-steps 238418 --warmup-steps 10 --train-warmup-steps 0 \
 --stop-steps 238419 \
 --checkpoint-steps 1000 \
---lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 2 \
+--lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 1 \
 --dist-url tcp://${master_ip}:7026 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
@@ -91,9 +91,9 @@ if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
     pp_degree=4
-    dp_degree=32
+    dp_degree=48
     n_layer_per_device=8
-    node_size=16
+    node_size=24
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
