@@ -56,7 +56,7 @@ class CocktailSGDDP:
             for i_group, group in enumerate(self.optimizer.optimizer.param_groups):
                 for i_para, para in enumerate(group["params"]):
                     _params.append(para)
-            self.flatten_para = flatten_tensors(_params)
+            self.flatten_para = flatten_tensors(_params, chunk=self.dp_group_size)
             print("Flattened parameter number: {}, element size: {}."
                   .format(self.flatten_para.data.numel(), self.flatten_para.data.element_size()))
         
