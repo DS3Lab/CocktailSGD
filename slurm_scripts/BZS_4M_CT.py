@@ -49,7 +49,7 @@ rp_common_crawl:0.035,\
 rp_github_no_markdown:0.075,\
 rp_github_md:0.025,\
 rp_stackexchange:0.1,\
-rp_wikipedia: 0.1 \
+rp_wikipedia:0.1 \
 --checkpoint-path /work/data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 512 \
