@@ -468,7 +468,8 @@ class CocktailSGDDP:
     def _try_partial_sync(self):
         try:
             self._partial_sync()
-        except:
+        except Exception as e:
+            print('*****ERR*****', e)
             self.flag_dp_exception = 1
 
     def pre_optimizer_step(self):
