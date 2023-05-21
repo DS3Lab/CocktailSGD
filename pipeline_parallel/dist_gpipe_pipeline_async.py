@@ -538,6 +538,7 @@ class GpipeAsync:
                         #                     'scale': self.optimizer.get_loss_scale(), ##todo
                     }, step=self.global_step,
                 )
+                print(f"step: {self.global_step}, loss: {sum(tr_loss)/len(tr_loss):.6f}, lr: {self.scheduler.get_last_lr()[0]:.6f}")
                 print("logging...")
                 if hasattr(self, 'experiment'):
                     self.experiment.log_metrics({

@@ -24,14 +24,14 @@ try:
 except ImportError:
     flash_attn_installed = False
     
-@torch.compile
+@torch.compile(mode="max-autotune")
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
 
-@torch.compile
+@torch.compile(mode="max-autotune")
 def apply_rotary_pos_emb(q, k, cos, sin, offset = 0):
     cos = cos[..., offset : q.shape[-2] + offset, :]
     sin = sin[..., offset : q.shape[-2] + offset, :]
@@ -160,53 +160,6 @@ class GPTNeoXAttention(_GPTNeoXAttention):
 
         return outputs
 
-    # fix nan problem
-    def _attn(self, query, key, value, attention_mask=None, head_mask=None):
-        # q, k, v: [bs, num_attention_heads, seq_len, attn_head_size]
-        # compute causal mask from causal mask buffer
-        batch_size, num_attention_heads, query_length, attn_head_size = query.size()
-        key_length = key.size(-2)
-
-        causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length].bool()
-
-        query = query.view(batch_size * num_attention_heads, query_length, attn_head_size)
-        key = key.view(batch_size * num_attention_heads, key_length, attn_head_size)
-        attn_scores = torch.zeros( # empty sometimes gives nan
-            batch_size * num_attention_heads,
-            query_length,
-            key_length,
-            dtype=query.dtype,
-            device=key.device,
-        )
-        attn_scores = torch.baddbmm(
-            attn_scores,
-            query,
-            key.transpose(1, 2),
-            beta=0.0,
-            alpha=(1.0 / self.norm_factor),
-        )
-        attn_scores = attn_scores.view(batch_size, num_attention_heads, query_length, key_length)
-
-        mask_value = torch.finfo(attn_scores.dtype).min
-        # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
-        # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
-        mask_value = torch.tensor(mask_value, dtype=attn_scores.dtype).to(attn_scores.device)
-        attn_scores = torch.where(causal_mask, attn_scores, mask_value)
-
-        if attention_mask is not None:
-            # Apply the attention mask
-            attn_scores = attn_scores + attention_mask
-
-        attn_weights = nn.functional.softmax(attn_scores, dim=-1)
-        attn_weights = attn_weights.to(value.dtype)
-
-        # Mask heads if we want to
-        if head_mask is not None:
-            attn_weights = attn_weights * head_mask
-
-        attn_output = torch.matmul(attn_weights, value)
-        return attn_output, attn_weights
-
 
 class GPTEmbeddings(nn.Module):
     def __init__(self, config):
@@ -229,6 +182,7 @@ class GPTEmbeddings(nn.Module):
             print(f'Cannot load from <model_path>. The model is randomly initialized.')
         return module
         
+    @torch.compile()
     def forward(self, input_ids, *args, **kargs):
         
         # input ids
@@ -252,7 +206,7 @@ class GPTBlock(_GPTNeoXBlock):
         To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
         """
         if self.config.use_parallel_residual:
-            @torch.compile
+            @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
                 res = x
@@ -274,7 +228,7 @@ class GPTBlock(_GPTNeoXBlock):
                 # )
                 return res + attn_output + mlp_out
         else:
-            @torch.compile
+            @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
                 res = x
@@ -377,6 +331,7 @@ class GPTLMHead(nn.Module):
             print('Cannot load from <model_name>. The model is randomly initialized.')
         return module
         
+    @torch.compile()
     def forward(self, x, *args, **kargs):
         x = self.final_layer_norm(x)
         x = self.embed_out(x)

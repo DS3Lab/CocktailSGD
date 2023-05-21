@@ -4,7 +4,7 @@ import numpy as np
 
 from .utils import *
 
-
+@torch.compile()
 def topr(x, ratio):
     x_flat = x.view(-1)
     numel = x_flat.numel()
@@ -16,6 +16,7 @@ def topr(x, ratio):
     values = x.data[masks.bool()]
     return values, masks
 
+@torch.compile()
 def topk(x, k, return_values=True, return_indices=False):
     k = max(k, 1)
     x_flat = x.view(-1)
