@@ -23,7 +23,7 @@ ARGS="--model-name /root/fm/models/_root_fm_models_rp_1t_real_fp16 \
 --load-pretrained-model true \
 --project-name redpajama \
 --model-type flash_gptneox \
---optimizer adam \
+--optimizer fusedadam \
 --seed 42 \
 --task-name rp_arxiv_small \
 --checkpoint-path ./model_ckpts/$WANDB_NAME \

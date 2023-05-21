@@ -21,6 +21,14 @@ from flash_attn.flash_attention import FlashAttention
 flash_attn_installed = True
 print('>>>>> flash attention')
 
+try:
+    import apex.contrib.layer_norm
+    # LayerNorm = apex.normalization.FusedLayerNorm
+    LayerNorm = apex.contrib.layer_norm.FastLayerNorm
+    print('>>>>> Apex FastLayerNorm')
+except:
+    LayerNorm = nn.LayerNorm
+
 from einops import rearrange
 
 class GPTNeoXAttention(_GPTNeoXAttention):
@@ -77,6 +85,7 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         # Compute attention
         attn_weights = None
         present = None
+        
         attn_output, _ = self.flash_attn(qkv, causal=True)
         attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
 
@@ -110,7 +119,7 @@ class GPTEmbeddings(nn.Module):
             print(f'Cannot load from <model_path>. The model is randomly initialized.')
         return module
         
-    # @torch.compile()
+    @torch.compile
     def forward(self, input_ids, *args, **kargs):
         
         # input ids
@@ -123,12 +132,22 @@ class GPTEmbeddings(nn.Module):
 class GPTBlock(_GPTNeoXBlock):
     def __init__(self, config, *args, use_checkpoint=True, **kargs):
         super(_GPTNeoXBlock, self).__init__()
-        self.input_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.post_attention_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.input_layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.post_attention_layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.attention = GPTNeoXAttention(config)
         self.mlp = GPTNeoXMLP(config)
         self.config = config
         self.use_checkpoint = use_checkpoint
+        
+        def mha_fw(x: torch.Tensor, res: torch.Tensor, attention_mask: torch.Tensor):
+            attention_layer_output = self.attention(self.input_layernorm(x), attention_mask=attention_mask)
+            attn_output = attention_layer_output[0]
+            return attn_output + res
+        
+        @torch.compile()
+        def mlp_fw(x: torch.Tensor, res: torch.Tensor):
+            mlp_out = self.mlp(self.post_attention_layernorm(x))
+            return mlp_out + res
         
         """
         To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
@@ -137,31 +156,23 @@ class GPTBlock(_GPTNeoXBlock):
             # @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
-                res = x
-                layer_norm_out = self.input_layernorm(x)
-                attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
-                attn_output = attention_layer_output[0]
-                # outputs = attention_layer_output[1:]
+                attn_output = mha_fw(x, res=x, attention_mask=attention_mask)
 
                 # x = x + attn(ln1(x)) + mlp(ln2(x))
                 # x_a = attn_output, 
-                mlp_out = self.mlp(self.post_attention_layernorm(x))
-                return res + attn_output + mlp_out
+                mlp_out = mlp_fw(x, res=attn_output)
+                return mlp_out
         else:
             # @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
-                res = x
-                layer_norm_out = self.input_layernorm(x)
-                attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
-                attn_output = attention_layer_output[0]
-                # outputs = attention_layer_output[1:]
+                
+                attn_output = mha_fw(x, res=x, attention_mask=attention_mask)
                 
                 # x = x + attn(ln1(x)) 
                 # x = x + mlp(ln2(x))
-                attn_output = attn_output + x
-                mlp_out = self.mlp(self.post_attention_layernorm(attn_output))
-                return attn_output + mlp_out
+                mlp_out = mlp_fw(attn_output, res=attn_output)
+                return mlp_out
 
         self.block_forward = block_forward
 
@@ -186,17 +197,6 @@ class GPTBlock(_GPTNeoXBlock):
             attention_mask = 1e9*(mask[:, None, None, :]-1)
         else:
             attention_mask = None
-            
-        if mask is None:
-            if layer_past is not None:
-                offset = layer_past[0].size(2)
-            else:
-                offset = 0
-        else:
-            # masked tokens
-            offset = (mask-1).sum(-1, keepdims=False)
-            if layer_past is not None:
-                offset += layer_past[0].size(2)
                 
         if self.training:
             
@@ -204,7 +204,7 @@ class GPTBlock(_GPTNeoXBlock):
                 x.requires_grad_(True)
                 x = checkpoint(self.block_forward, x, attention_mask, None)
             else:
-                x = self.block_forward(x, prefix_masks=prefix_masks)
+                x = self.block_forward(x, attention_mask, None)
             
             return x
            
@@ -227,7 +227,7 @@ class GPTBlock(_GPTNeoXBlock):
 class GPTLMHead(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.final_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.final_layer_norm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.embed_out = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         
     @classmethod
@@ -243,7 +243,7 @@ class GPTLMHead(nn.Module):
             print('Cannot load from <model_name>. The model is randomly initialized.')
         return module
         
-    # @torch.compile()
+    @torch.compile
     def forward(self, x, *args, **kargs):
         x = self.final_layer_norm(x)
         x = self.embed_out(x)

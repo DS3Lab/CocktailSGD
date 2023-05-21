@@ -89,11 +89,11 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
         dp_size = 1
     pp_comm = get_pipeline_parallel_comm()
     
-    stop_flag = torch.zeros(1, dtype=torch.int64).to(device)
+    stop_flag = torch.zeros(1, dtype=torch.int32).to(device)
     
     input_ids = torch.zeros(
         [args.batch_size, args.seq_length], 
-        dtype=torch.int64
+        dtype=torch.int32
     ).to(device)
     
     do_sync_before_save = (args.dp_mode in ['local'] and use_dp)
@@ -101,16 +101,16 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
     if get_pipeline_parallel_rank() == 0:
         
         for i, data in enumerate(train_data_loader):
-            if i < pipe.global_step:
-                print('Skipping step', i)
-                continue
+            # if i < pipe.global_step:
+            #     print('Skipping step', i)
+            #     continue
                 
             pp_comm.broadcast(stop_flag, 0)
             
             if stop_flag.item() == 1:
                 break
             
-            input_ids = data['input_ids'].to(torch.int64).to(device)
+            input_ids = data['input_ids'].to(torch.int32).to(device)
             
             pp_comm.broadcast(input_ids, 0)
             

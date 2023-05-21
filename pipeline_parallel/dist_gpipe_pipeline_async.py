@@ -38,6 +38,10 @@ def create_optimizer(model, optimizer_type, weight_decay=0.01, learning_rate=2e-
     elif optimizer_type == '8bit-adam':
         from bitsandbytes.optim import Adam8bit as AdamW
         print('>>>>> using 8bit-Adam')
+    elif optimizer_type == 'fusedadam':
+        import apex
+        AdamW = apex.optimizers.FusedAdam
+        print('>>>>> using Apex FusedAdam')
     else:
         assert False
     
