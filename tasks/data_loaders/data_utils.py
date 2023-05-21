@@ -14,9 +14,10 @@ from comm.comm_utils import *
 from itertools import islice, chain
 from functools import partial
 from random import randint
+from random import shuffle
 
 SHOW_DATA = int(os.environ.get('SHOW_DATA', 1))
-
+RP_PREFIX = os.environ.get('RP_PREFIX', '/root/data')
 
 def tokenize_and_pack(examples, tokenizer, seq_length=2048):
     examples = tokenizer(examples["text"])
@@ -25,9 +26,16 @@ def tokenize_and_pack(examples, tokenizer, seq_length=2048):
     if total_length >= seq_length:
         total_length = (total_length // seq_length) * seq_length
         
+    # result = {
+    #     k: torch.tensor([t[i : i + seq_length] for i in range(0, total_length, seq_length)])
+    #     for k, t in concatenated_examples.items()
+    # }
+    t = concatenated_examples['input_ids']
+    t = [t[i : i + seq_length] for i in range(0, total_length, seq_length)]
+    shuffle(t)
+    t = torch.tensor(t)
     result = {
-        k: torch.tensor([t[i : i + seq_length] for i in range(0, total_length, seq_length)])
-        for k, t in concatenated_examples.items()
+        'input_ids': t,
     }
     return result
 
@@ -53,7 +61,7 @@ class StreamDatasetList(IterableDataset):
     def get_sequence(self):
         
         iterators = [(
-            cycle(d.get_sequence()) if hasattr(d, 'get_sequence') else iter(d)
+            cycle(d.get_sequence()) if hasattr(d, 'get_sequence') else cycle(iter(d))
         ) for d in self.datasets]
         prob_ths = np.cumsum([p / sum(self.sample_probs) for p in self.sample_probs])
         
@@ -67,6 +75,10 @@ class StreamDatasetList(IterableDataset):
                 if p < th:
                     
                     inputs = next(it)
+                    
+                    if inputs['input_ids'].size(0) != self.seq_length:
+                        print('!!', inputs['input_ids'].shape)
+                        continue
                     
                     if SHOW_DATA:
                         if global_i % self.print_sample_every_n == 0:
@@ -106,17 +118,21 @@ def name_to_dataset(task, tokenizer, args):
             dataset = StreamDataset('./data/mmlu-cot.json', tokenizer, args.seq_length)
         elif task == 'rp_common_crawl':
             _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
-            data = load_dataset("json", data_files=f"/root/data/common_crawl/2019-30/*.jsonl.zst", split="train", streaming=True)
-            data = data.shuffle(buffer_size=100_000, seed=args.seed)
+            data = load_dataset("json", data_files=os.path.join(
+                RP_PREFIX, 
+                f"common_crawl/*.jsonl"), split="train", streaming=True)
+            data = data.shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
-                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
+                _tokenize_and_pack, batched=True, batch_size=64, remove_columns= ['text', 'source', 'pred_label', 'pred_label_prob', 'wiki_prob']
             ).with_format("torch")
         elif task.startswith('rp_'):
-            _, _split = task.split('_')
+            _split = task[3:]
             _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
-            data = load_dataset("json", data_files=f"/root/data/{_split}/*.jsonl", split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
+            data = load_dataset("json", data_files=os.path.join(
+                RP_PREFIX,
+                f"{_split}/*.jsonl"), split="train", streaming=True).shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
-                _tokenize_and_pack, batched=True, batch_size=32, remove_columns= ['text', 'meta']
+                _tokenize_and_pack, batched=True, batch_size=64, remove_columns= ['text', 'meta']
             ).with_format("torch")
         elif task.endswith('jsonl'):
             if 'p3' in task:
@@ -151,7 +167,7 @@ def name_to_dataset_eval(task, tokenizer, args):
     return dataset
 
     
-def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
+def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None, is_shard_data_loader=False):
     
     task_list = args.task_name.split(',')
     task_names = []
@@ -183,12 +199,22 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
     if state_dict is not None:
         stream_dataset.load_state_dict(state_dict)
     
-    train_data_loader = torch.utils.data.DataLoader(stream_dataset,
-                                                    batch_size=args.batch_size * args.data_group_size,
-                                                    shuffle=False,
-                                                    num_workers=num_workers,
-                                                    pin_memory=True,
-                                                    collate_fn=None)
+    if is_shard_data_loader:
+        train_data_loader = torch.utils.data.DataLoader(
+            stream_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=None)
+    else:
+        train_data_loader = torch.utils.data.DataLoader(
+            stream_dataset,
+            batch_size=args.batch_size * args.data_group_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=None)
     
     print('data_utils: get train_data_loader')
     

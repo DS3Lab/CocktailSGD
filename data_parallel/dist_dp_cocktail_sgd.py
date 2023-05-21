@@ -56,7 +56,7 @@ class CocktailSGDDP:
             for i_group, group in enumerate(self.optimizer.optimizer.param_groups):
                 for i_para, para in enumerate(group["params"]):
                     _params.append(para)
-            self.flatten_para = flatten_tensors(_params)
+            self.flatten_para = flatten_tensors(_params, chunk=self.dp_group_size)
             print("Flattened parameter number: {}, element size: {}."
                   .format(self.flatten_para.data.numel(), self.flatten_para.data.element_size()))
         
@@ -466,10 +466,13 @@ class CocktailSGDDP:
                 self.dp_comm_stream.record_event(self.sync_gradients_ready_event)
                 
     def _try_partial_sync(self):
-        try:
-            self._partial_sync()
-        except:
-            self.flag_dp_exception = 1
+        self._partial_sync()
+#         try:
+#             self._partial_sync()
+#         except Exception as e:
+#             print('*****ERR*****')
+#             print(e)
+#             self.flag_dp_exception = 1
 
     def pre_optimizer_step(self):
         if not flag.FLAG_DISABLE_COMPRESSION:

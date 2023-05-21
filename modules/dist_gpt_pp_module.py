@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch import nn
 from comm.comm_utils import *
 
@@ -57,7 +58,7 @@ class GPTStageBase(nn.Module):
         if self.load_pretrained_model:
             print('loading embs')
             layer.load_state_dict(
-                torch.load(f'{self.model_name}/pytorch_embs.pt')
+                torch.load(f'{self.model_name}/pytorch_embs.pt', map_location=torch.device('cpu'))
             )
         return layer
 
@@ -66,7 +67,7 @@ class GPTStageBase(nn.Module):
         if self.load_pretrained_model:
             print('loading lm_head')
             layer.load_state_dict(
-                torch.load(f'{self.model_name}/pytorch_lm_head.pt')
+                torch.load(f'{self.model_name}/pytorch_lm_head.pt', map_location=torch.device('cpu'))
             )
         return layer
 
@@ -76,7 +77,7 @@ class GPTStageBase(nn.Module):
         if self.load_pretrained_model:
             print(f'loading layer {layer_idx}')
             layer.load_state_dict(
-                torch.load(f'{self.model_name}/pytorch_{layer_idx}.pt')
+                torch.load(f'{self.model_name}/pytorch_{layer_idx}.pt', map_location=torch.device('cpu'))
             )
         return layer
     

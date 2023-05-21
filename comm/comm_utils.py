@@ -77,6 +77,7 @@ def default_init(args):
         print(f"new master url: {args.dist_url}")
     except Exception as e:
         print("destroy_process_group except Exception: {}".format(str(e)))
+    print(args.dist_url, args.rank, args.world_size)
     dist.init_process_group(backend='gloo', timeout=datetime.timedelta(seconds=30*60), init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
 def init_communicators(args):
