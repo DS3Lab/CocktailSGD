@@ -23,21 +23,17 @@ try:
 except ImportError:
     flash_attn_installed = False
     
-
+@torch.compile
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
 
+@torch.compile
 def apply_rotary_pos_emb(q, k, cos, sin, offset = 0):
-    if isinstance(offset, torch.Tensor):
-        realidx = torch.arange(q.shape[-2], device=q.device).view(1, q.shape[-2]) + offset[:, None]
-        cos = cos.squeeze(0).squeeze(0)[realidx].view(offset.size(0), 1, q.shape[-2], cos.size(-1))
-        sin = sin.squeeze(0).squeeze(0)[realidx].view(offset.size(0), 1, q.shape[-2], sin.size(-1))
-    else:
-        cos = cos[..., offset : q.shape[-2] + offset, :]
-        sin = sin[..., offset : q.shape[-2] + offset, :]
+    cos = cos[..., offset : q.shape[-2] + offset, :]
+    sin = sin[..., offset : q.shape[-2] + offset, :]
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -251,23 +247,33 @@ class GPTBlock(_GPTNeoXBlock):
         self.config = config
         self.use_checkpoint = use_checkpoint
         
-        def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
-                          prefix_masks: torch.Tensor) -> torch.Tensor:
-            res = x
-            """
-            To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
-            """
-            layer_norm_out = self.input_layernorm(x)
-            attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
-            attn_output = attention_layer_output[0]
-            # outputs = attention_layer_output[1:]
+        """
+        To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
+        """
+        if self.config.use_parallel_residual:
+            @torch.compile
+            def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
+                              prefix_masks: torch.Tensor) -> torch.Tensor:
+                res = x
+                layer_norm_out = self.input_layernorm(x)
+                attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
+                attn_output = attention_layer_output[0]
+                # outputs = attention_layer_output[1:]
 
-            if self.config.use_parallel_residual:
                 # x = x + attn(ln1(x)) + mlp(ln2(x))
                 # x_a = attn_output, 
                 mlp_out = self.mlp(self.post_attention_layernorm(x))
                 return res + attn_output + mlp_out
-            else:
+        else:
+            @torch.compile
+            def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
+                              prefix_masks: torch.Tensor) -> torch.Tensor:
+                res = x
+                layer_norm_out = self.input_layernorm(x)
+                attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
+                attn_output = attention_layer_output[0]
+                # outputs = attention_layer_output[1:]
+                
                 # x = x + attn(ln1(x)) 
                 # x = x + mlp(ln2(x))
                 attn_output = attn_output + x
