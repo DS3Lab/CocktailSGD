@@ -50,7 +50,7 @@ def _compress_nbits(x, bits, scale_method='max', scale_dims=(0,1),
     return x, scale
 
 
-@torch.compile()
+# @torch.compile()
 def _decompress_nbits(x, scale, bits):
     
     fbits = bits - 1
@@ -174,7 +174,7 @@ def decompress_nbits(x, scale, bits):
 
 
 
-@torch.compile()
+# @torch.compile()
 def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512,
                               stochastic=False, minimum_stochastic_distance=0.2):
     

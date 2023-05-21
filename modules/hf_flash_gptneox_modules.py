@@ -14,30 +14,14 @@ from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXMLP
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXLayer as _GPTNeoXBlock
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXModel as _GPTNeoXModel
 from transformers.models.gpt_neox.configuration_gpt_neox import GPTNeoXConfig as GPTConfig
-from transformers.models.gpt_neox.modeling_gpt_neox import RotaryEmbedding
+# from transformers.models.gpt_neox.modeling_gpt_neox import RotaryEmbedding
 
-try:
-    from flash_attn.flash_attention import FlashAttention
-    # from flash_attn.ops.fused_dense import fused_dense_gelu_dense_func
-    flash_attn_installed = True
-    print('>>>>> flash attention')
-except ImportError:
-    flash_attn_installed = False
-    
-@torch.compile(mode="max-autotune")
-def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
+from flash_attn.layers.rotary import RotaryEmbedding
+from flash_attn.flash_attention import FlashAttention
+flash_attn_installed = True
+print('>>>>> flash attention')
 
-@torch.compile(mode="max-autotune")
-def apply_rotary_pos_emb(q, k, cos, sin, offset = 0):
-    cos = cos[..., offset : q.shape[-2] + offset, :]
-    sin = sin[..., offset : q.shape[-2] + offset, :]
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed, k_embed
+from einops import rearrange
 
 class GPTNeoXAttention(_GPTNeoXAttention):
     
@@ -55,9 +39,7 @@ class GPTNeoXAttention(_GPTNeoXAttention):
             ),
         )
         self.register_buffer("masked_bias", torch.tensor(-1e9))
-        self.rotary_emb = RotaryEmbedding(
-            self.rotary_ndims, config.max_position_embeddings, base=config.rotary_emb_base
-        )
+        self.rotary_emb = RotaryEmbedding(self.rotary_ndims, base=config.rotary_emb_base, interleaved=False)
         self.register_buffer(
             "norm_factor",
             torch.sqrt(torch.tensor(self.head_size, dtype=torch.float32)).to(torch.get_default_dtype()),
@@ -66,8 +48,8 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         self.query_key_value = nn.Linear(config.hidden_size, 3 * config.hidden_size)
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         
-        if flash_attn_installed:
-            self.flash_attn = FlashAttention(softmax_scale=1.0/self.norm_factor, attention_dropout = 0)
+        assert flash_attn_installed
+        self.flash_attn = FlashAttention(softmax_scale=1.0/self.norm_factor, attention_dropout = 0)
     
     def forward(
         self,
@@ -87,71 +69,17 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         # Attention heads [batch, seq_len, hidden_size]
         #   --> [batch, seq_len, (np * 3 * head_size)]
         qkv = self.query_key_value(hidden_states)
-
-        # [batch, seq_len, (num_heads * 3 * head_size)]
-        #   --> [batch, seq_len, num_heads, 3 * head_size]
-        new_qkv_shape = qkv.size()[:-1] + (self.num_attention_heads, 3 * self.head_size)
-        qkv = qkv.view(*new_qkv_shape)
-
-        # [batch, seq_len, num_attention_heads, 3 * head_size] --> 3 [batch, num_attention_heads, seq_len, head_size]
-        query = qkv[..., : self.head_size].permute(0, 2, 1, 3)
-        key = qkv[..., self.head_size : 2 * self.head_size].permute(0, 2, 1, 3)
-        value = qkv[..., 2 * self.head_size :].permute(0, 2, 1, 3)
-
-        # Compute rotary embeddings on rotary_ndims
-        query_rot = query[..., : self.rotary_ndims]
-        query_pass = query[..., self.rotary_ndims :]
-        key_rot = key[..., : self.rotary_ndims]
-        key_pass = key[..., self.rotary_ndims :]
-
-        # Compute token offset for rotary embeddings (when decoding)
-        seq_len = key.shape[-2]
         
-        if layer_past is not None:
-            if offset is None:
-                offset = layer_past[0].shape[-2]
-            seq_len += layer_past[0].shape[-2]
-            
-        if offset is None:
-            offset = 0
-        
-        cos, sin = self.rotary_emb(value, seq_len=seq_len)
-        query, key = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, offset=offset)
-        query = torch.cat((query, query_pass), dim=-1)
-        key = torch.cat((key, key_pass), dim=-1)
-
-        # Cache QKV values
-        if has_layer_past:
-            past_key = layer_past[0]
-            past_value = layer_past[1]
-            key = torch.cat((past_key, key), dim=-2)
-            value = torch.cat((past_value, value), dim=-2)
-        present = None if use_cache else (key, value)
+        qkv = rearrange(qkv, '... (h three d) -> ... h three d', three=3, d=self.head_size)
+        qkv = qkv.permute(0, 1, 3, 2, 4)
+        qkv = self.rotary_emb(qkv)
 
         # Compute attention
-        if flash_attn_installed:
-            
-            query = query.permute(0, 2, 1, 3).half()
-            key = key.permute(0, 2, 1, 3).half()
-            value = value.permute(0, 2, 1, 3).half()
-            qkv = torch.stack(
-                [
-                    query.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                    key.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                    value.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                ],
-                dim=2
-            )
+        attn_weights = None
+        present = None
+        attn_output, _ = self.flash_attn(qkv, causal=True)
+        attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
 
-            attn_weights = None
-            attn_output, _ = self.flash_attn(qkv, causal=True)
-            attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
-        else:
-            attn_output, attn_weights = self._attn(query, key, value,
-                                                   attention_mask, head_mask)
-            # Reshape outputs
-            attn_output = self._merge_heads(attn_output, self.num_attention_heads,
-                                            self.head_size)
         attn_output = self.dense(attn_output)
 
         outputs = (attn_output, present)
@@ -182,7 +110,7 @@ class GPTEmbeddings(nn.Module):
             print(f'Cannot load from <model_path>. The model is randomly initialized.')
         return module
         
-    @torch.compile()
+    # @torch.compile()
     def forward(self, input_ids, *args, **kargs):
         
         # input ids
@@ -206,7 +134,7 @@ class GPTBlock(_GPTNeoXBlock):
         To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
         """
         if self.config.use_parallel_residual:
-            @torch.compile()
+            # @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
                 res = x
@@ -218,17 +146,9 @@ class GPTBlock(_GPTNeoXBlock):
                 # x = x + attn(ln1(x)) + mlp(ln2(x))
                 # x_a = attn_output, 
                 mlp_out = self.mlp(self.post_attention_layernorm(x))
-                # hidden_states = self.post_attention_layernorm(x)
-                # mlp_out = fused_dense_gelu_dense_func(
-                #     hidden_states,
-                #     self.mlp.dense_h_to_4h.weight, self.mlp.dense_4h_to_h.weight,
-                #     self.mlp.dense_h_to_4h.bias, self.mlp.dense_4h_to_h.bias,
-                #     save_pre_act=False,
-                #     return_residual=False
-                # )
                 return res + attn_output + mlp_out
         else:
-            @torch.compile()
+            # @torch.compile()
             def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
                               prefix_masks: torch.Tensor) -> torch.Tensor:
                 res = x
@@ -241,14 +161,6 @@ class GPTBlock(_GPTNeoXBlock):
                 # x = x + mlp(ln2(x))
                 attn_output = attn_output + x
                 mlp_out = self.mlp(self.post_attention_layernorm(attn_output))
-                # hidden_states = self.post_attention_layernorm(attn_output)
-                # mlp_out = fused_dense_gelu_dense_func(
-                #     hidden_states,
-                #     self.mlp.dense_h_to_4h.weight, self.mlp.dense_4h_to_h.weight,
-                #     self.mlp.dense_h_to_4h.bias, self.mlp.dense_4h_to_h.bias,
-                #     save_pre_act=False,
-                #     return_residual=False
-                # )
                 return attn_output + mlp_out
 
         self.block_forward = block_forward
@@ -331,7 +243,7 @@ class GPTLMHead(nn.Module):
             print('Cannot load from <model_name>. The model is randomly initialized.')
         return module
         
-    @torch.compile()
+    # @torch.compile()
     def forward(self, x, *args, **kargs):
         x = self.final_layer_norm(x)
         x = self.embed_out(x)
