@@ -89,11 +89,11 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
         dp_size = 1
     pp_comm = get_pipeline_parallel_comm()
     
-    stop_flag = torch.zeros(1, dtype=torch.int32).to(device)
+    stop_flag = torch.zeros(1, dtype=torch.int64).to(device)
     
     input_ids = torch.zeros(
         [args.batch_size, args.seq_length], 
-        dtype=torch.int32
+        dtype=torch.int64
     ).to(device)
     
     do_sync_before_save = (args.dp_mode in ['local'] and use_dp)
@@ -110,7 +110,7 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
             if stop_flag.item() == 1:
                 break
             
-            input_ids = data['input_ids'].to(torch.int32).to(device)
+            input_ids = data['input_ids'].to(torch.int64).to(device)
             
             pp_comm.broadcast(input_ids, 0)
             
@@ -228,6 +228,9 @@ def main():
     parser.add_argument('--net-interface', 
                         type=str, default='lo', metavar='S',
                         help='net_interface')
+    parser.add_argument('--n-gpu-per-node', 
+                        type=int, default=8, metavar='S',
+                        help='net_interface')
     parser.add_argument('--job-id', 
                         type=str, default="0", metavar='S',
                         help='an uuid')
@@ -247,7 +250,7 @@ def main():
     
     init_coordinator_client(args, None)
     coord_client = get_coordinator_client()
-    res = coord_client.notify_inference_join(args.net_interface)
+    res = coord_client.notify_inference_join(args.net_interface, args.n_gpu_per_node)
     prime_ip = res['prime_ip']
     rank = res['rank']
     port = res['nccl_port']

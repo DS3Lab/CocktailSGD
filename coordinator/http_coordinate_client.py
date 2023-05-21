@@ -20,10 +20,14 @@ class CoordinatorInferenceHTTPClient:
     def notify_inference_heartbeat(self):
         pass
 
-    def notify_inference_join(self, netname='access'):
+    def notify_inference_join(self, netname='access', n_gpu_per_node=None):
         ip = ni.ifaddresses(netname)[ni.AF_INET][0]['addr']
-        return requests.post("http://173.82.206.98:5000/rank/"+str(self.job_id),
-                             json={"ip": ip}).json()
+        if n_gpu_per_node is None:
+            return requests.post("http://173.82.206.98:5000/rank/"+str(self.job_id),
+                                 json={"ip": ip}).json()
+        else:
+            return requests.post("http://173.82.206.98:5000/rank/"+str(self.job_id),
+                                 json={"ip": ip, "n_gpu_per_node": n_gpu_per_node}).json()
 
 
 def get_coordinator_client() -> CoordinatorInferenceHTTPClient:
