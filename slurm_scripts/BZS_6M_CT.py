@@ -43,7 +43,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-700BT-neomix-bzs6m_lr1e-5-cocktail-mbsz2
+export WANDB_NAME=RP-7B-700BT-fix-wiki-cocktail
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -59,11 +59,16 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_700b_real_fp16 \
 --project-name redpajama \
 --model-type flash_gptneox \
 --optimizer fusedadam \
---seed 424242 \
+--seed 42424242 \
 --task-name \
-rp_arxiv:0.052,\
-rp_c4:0.63,\
-rp_stackexchange:0.1 \
+rp_arxiv:0.0231,\
+rp_book:0.0215,\
+rp_c4:0.600,\
+rp_common_crawl:0.1054,\
+rp_github_no_markdown:0.075,\
+rp_github_md:0.025,\
+rp_stackexchange:0.10,\
+rp_wikipedia: 0.05 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
@@ -71,7 +76,7 @@ rp_stackexchange:0.1 \
 --stop-steps 159000 \
 --checkpoint-steps 1000 \
 --lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 1 \
---dist-url tcp://${master_ip}:8916 \
+--dist-url tcp://${master_ip}:8956 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
 --fp16 \
