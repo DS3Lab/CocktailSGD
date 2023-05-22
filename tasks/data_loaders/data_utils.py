@@ -130,10 +130,7 @@ def name_to_dataset(task, tokenizer, args):
             _tokenize_and_pack = partial(tokenize_and_pack, tokenizer=tokenizer, seq_length=args.seq_length)
             data = load_dataset("json", data_files=os.path.join(
                 RP_PREFIX,
-                f"{_split}/*.jsonl"), split="train", streaming=True)
-            if 'wiki' in _split:
-                data = data.filter(lambda x: x['meta']['language'] == 'en')
-            data = data.shuffle(buffer_size=1_000, seed=args.seed)
+                f"{_split}/*.jsonl"), split="train", streaming=True).shuffle(buffer_size=1_000, seed=args.seed)
             dataset = data.map(
                 _tokenize_and_pack, batched=True, batch_size=64, remove_columns= ['text', 'meta']
             ).with_format("torch")
