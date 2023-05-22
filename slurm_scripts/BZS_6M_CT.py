@@ -68,7 +68,7 @@ rp_common_crawl:0.1054,\
 rp_github_no_markdown:0.075,\
 rp_github_md:0.025,\
 rp_stackexchange:0.10,\
-rp_wikipedia: 0.05 \
+rp_wikipedia:0.05 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
