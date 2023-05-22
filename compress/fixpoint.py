@@ -5,8 +5,8 @@ import math
 
 from .utils import *
 
-
-def _rounding(x, stochastic=False, minimum_stochastic_distance=0.2):
+@torch.jit.script
+def _rounding(x: torch.Tensor, stochastic: bool=False, minimum_stochastic_distance: float=0.2):
     if stochastic:
         x_floor = x.floor()
         th = x - x_floor
@@ -50,8 +50,8 @@ def _compress_nbits(x, bits, scale_method='max', scale_dims=(0,1),
     return x, scale
 
 
-# @torch.compile()
-def _decompress_nbits(x, scale, bits):
+@torch.jit.script
+def _decompress_nbits(x: torch.Tensor, scale: torch.Tensor, bits: int):
     
     fbits = bits - 1
     
@@ -174,15 +174,15 @@ def decompress_nbits(x, scale, bits):
 
 
 
-# @torch.compile()
-def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512,
-                              stochastic=False, minimum_stochastic_distance=0.2):
+@torch.jit.script
+def _compress_nbits_by_bucket(x: torch.Tensor, bits: int, scale_method: str='max', bucket_size: int=512,
+                              stochastic: bool=False, minimum_stochastic_distance: float=0.2):
     
     if bits == 1:
         
         x = x.view(bucket_size, -1)
         
-        scale = (x.norm(dim=0) / (bucket_size**0.5)).half()
+        scale = (x.norm(p=2, dim=0) / (bucket_size**0.5)).half()
         
         x = (x >= 0)
         
@@ -197,10 +197,10 @@ def _compress_nbits_by_bucket(x, bits, scale_method='max', bucket_size=512,
     
     if scale_method == 'max':
         # issue: sensitive to outlier points
-        scale = x.abs().amax([0], keepdims=True)
+        scale = x.abs().amax([0], keepdim=True)
     elif scale_method == 'l2':
         # ~95% confidence interval for normal distribution
-        scale = x.pow(2).mean([0], keepdims=True).sqrt() * 2 
+        scale = x.pow(2).mean([0], keepdim=True).sqrt() * 2 
     else:
         raise Exception('unkonwn scale method.')
     # fp16 should be enough

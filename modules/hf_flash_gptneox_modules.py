@@ -28,6 +28,24 @@ try:
     print('>>>>> Apex FastLayerNorm')
 except:
     LayerNorm = nn.LayerNorm
+    
+try:
+    import apex.fused_dense
+    def _fused_dense_gelu_dense(input, weight1, bias1, weight2, bias2):
+        return apex.fused_dense.FusedDenseGeluDenseFunc.apply(input, weight1, bias1, weight2, bias2)
+    fused_dense_installed = True
+    print('>>>>> Apex FusedDenseGeluDense')
+except:
+    fused_dense_installed = False
+    
+    
+try:
+    import xformers.ops as xops
+    xops_installed = True
+    print('>>>>> Xformers installed')
+except:
+    xops_installed = False
+    
 
 from einops import rearrange
 
@@ -78,17 +96,21 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         #   --> [batch, seq_len, (np * 3 * head_size)]
         qkv = self.query_key_value(hidden_states)
         
-        qkv = rearrange(qkv, '... (h three d) -> ... h three d', three=3, d=self.head_size)
-        qkv = qkv.permute(0, 1, 3, 2, 4)
-        qkv = self.rotary_emb(qkv)
-
-        # Compute attention
         attn_weights = None
         present = None
         
-        attn_output, _ = self.flash_attn(qkv, causal=True)
+        qkv = rearrange(qkv, '... (h three d) -> ... h three d', three=3, d=self.head_size)
+        qkv = qkv.permute(0, 1, 3, 2, 4)
+        qkv = self.rotary_emb(qkv)
+        
+        if not xops_installed:
+            # Compute attention
+            attn_output, _ = self.flash_attn(qkv, causal=True)
+        else:
+            q, k, v = qkv.unbind(2)
+            attn_output = xops.memory_efficient_attention(q, k, v, attn_bias=xops.LowerTriangularMask())
+            
         attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
-
         attn_output = self.dense(attn_output)
 
         outputs = (attn_output, present)
@@ -144,9 +166,21 @@ class GPTBlock(_GPTNeoXBlock):
             attn_output = attention_layer_output[0]
             return attn_output + res
         
-        @torch.compile()
+        # @torch.compile()
         def mlp_fw(x: torch.Tensor, res: torch.Tensor):
-            mlp_out = self.mlp(self.post_attention_layernorm(x))
+            if fused_dense_installed:
+                shape = x.shape
+                x = self.post_attention_layernorm(x)
+                x = x.view(-1, config.hidden_size)
+                mlp_out = _fused_dense_gelu_dense(
+                    x, 
+                    self.mlp.dense_h_to_4h.weight,
+                    self.mlp.dense_h_to_4h.bias,
+                    self.mlp.dense_4h_to_h.weight,
+                    self.mlp.dense_4h_to_h.bias,
+                ).view(shape)
+            else:
+                mlp_out = self.mlp(self.post_attention_layernorm(x))
             return mlp_out + res
         
         """
