@@ -59,19 +59,14 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_700b_real_fp16 \
 --project-name redpajama \
 --model-type flash_gptneox \
 --optimizer fusedadam \
---seed 4242 \
+--seed 424242 \
 --task-name \
 rp_arxiv:0.052,\
-rp_book:0.03,\
 rp_c4:0.63,\
-rp_common_crawl:0.035,\
-rp_github_no_markdown:0.075,\
-rp_github_md:0.025,\
-rp_stackexchange:0.1,\
-rp_wikipedia:0.1 \
+rp_stackexchange:0.1 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
---initial-loss-scale 512 \
+--initial-loss-scale 4096 \
 --total-steps 159000 --warmup-steps 10 --train-warmup-steps 0 \
 --stop-steps 159000 \
 --checkpoint-steps 1000 \
