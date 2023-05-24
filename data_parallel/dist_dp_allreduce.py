@@ -2,6 +2,7 @@ import torch.cuda
 from comm.comm_utils import *
 from .flatten_utils import flatten_params
 
+count = 0
 
 class AllReduceDP:
     def __init__(self, args, device, module: torch.nn.Module, optimizer: torch.optim.Optimizer = None, flatten=True):
@@ -120,6 +121,18 @@ class AllReduceDP:
         with torch.cuda.stream(self.torch_optim_comp_stream):
             self.torch_optim_comp_stream.wait_event(self.allreduce_grad_ready_event)
             self.profile_mark_optimizer_step_start()
+            
+            global count
+            
+            if count > 50:
+                grads = {}
+                for name, para in self.module.named_parameters():
+                    if para.grad is None:
+                        continue
+                    grads[name] = para.grad.detach().cpu().numpy()
+                torch.save(grads, f'grad_{self.global_rank}.pt')
+            count += 1
+            
             self.optimizer.step()
             self.torch_optim_comp_stream.record_event(self.optimizer_step_ready_event)
 

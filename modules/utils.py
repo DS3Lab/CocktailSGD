@@ -14,7 +14,7 @@ except ImportError:
     CrossEntropyLoss = torch.nn.CrossEntropyLoss
     cross_entropy_fn = CrossEntropyLoss()
 
-@torch.compile
+# @torch.compile
 def _shift(lm_logits, labels):
     shift_logits = lm_logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()

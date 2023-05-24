@@ -1,3 +1,5 @@
+import torch
+Tensor = torch.Tensor
 from .torch_backend import *
 from .nccl_backend import *
 
@@ -202,3 +204,46 @@ def reinit_dp_communicator(args):
                 assert False
             
         print('######## dp comm reinit done!! ########')
+
+        
+
+
+class MPAllReduceFunc(torch.autograd.Function):
+    """Gather the input from sequence parallel region and concatenate."""
+
+    @staticmethod
+    def forward(ctx, input_: Tensor) -> Tensor:
+        comm = get_pipeline_parallel_comm()
+        comm.all_reduce(input_)
+        return input_
+
+    @staticmethod
+    def backward(ctx, grad_output: Tensor):
+        return grad_output
+
+mp_all_reduce = MPAllReduceFunc.apply
+
+
+class MPAllGatherFunc(torch.autograd.Function):
+    """Gather the input from sequence parallel region and concatenate."""
+
+    @staticmethod
+    def forward(ctx, input_: Tensor) -> Tensor:
+        comm = get_pipeline_parallel_comm()
+        output_list = [
+            torch.empty(input_.shape, dtype=input_.dtype, device=input_.device) \
+            for _ in range(get_pipeline_parallel_world_size())
+        ]
+        comm.all_gather(input_, output_list)
+        output = torch.cat(output_list, dim=-1)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output: Tensor):
+        comm = get_pipeline_parallel_comm()
+        grad_output_list = grad_output.chunk(get_pipeline_parallel_world_size(), dim=-1)
+        grad_output = torch.zeros_like(grad_output_list[0])
+        comm.scatter_reduce(grad_output, grad_output_list)
+        return grad_output
+
+mp_all_gather = MPAllGatherFunc.apply

@@ -147,6 +147,31 @@ class NCCLCommunicator:
             stream
         )
         cupy.cuda.nccl.groupEnd()
+        
+    def scatter_reduce(self,
+                tensor: torch.Tensor,
+                scatter_list: List[torch.Tensor],
+                stream=cupy.cuda.Stream.null):
+        
+        print('>', scatter_list[0].shape, '*', len(scatter_list))
+        buffers = [torch.empty_like(tensor) for _ in range(self.comm_group_size)]
+        print('<', buffers[0].shape, '*', len(buffers))
+        cupy.cuda.nccl.groupStart()
+        for i in range(self.comm_group_size):
+            self.send(
+                scatter_list[i],
+                i,
+                stream
+            )
+            self.recv(
+                buffers[i],
+                i,
+                stream
+            )
+        cupy.cuda.nccl.groupEnd()
+        tensor.zero_()
+        for buffer in buffers:
+            tensor.add_(buffer)
 
     def gather(self,
                tensor: torch.Tensor,
