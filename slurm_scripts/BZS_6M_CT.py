@@ -59,7 +59,7 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_700b_real_fp16 \
 --project-name redpajama \
 --model-type flash_gptneox \
 --optimizer fusedadam \
---seed 42424242 \
+--seed 42 \
 --task-name \
 rp_arxiv:0.0231,\
 rp_book:0.0215,\
@@ -68,7 +68,7 @@ rp_common_crawl:0.1054,\
 rp_github_no_markdown:0.075,\
 rp_github_md:0.025,\
 rp_stackexchange:0.10,\
-rp_wikipedia:0.05 \
+rp_wikien:0.05 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
@@ -85,21 +85,21 @@ rp_wikipedia:0.05 \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \
-RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
+RP_PREFIX=/work/data/data_0_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 0 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_0 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
+RP_PREFIX=/work/data/data_0_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 1 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
+RP_PREFIX=/work/data/data_0_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 2 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_1 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
+RP_PREFIX=/work/data/data_0_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 3 --rank 0 \
     & sleep 2 ; \
-RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
+RP_PREFIX=/work/data/data_1_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 4 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
+RP_PREFIX=/work/data/data_1_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 5 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
+RP_PREFIX=/work/data/data_1_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 6 --rank 0 \
     & \
-RP_PREFIX=/work/data/data_3 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
+RP_PREFIX=/work/data/data_1_2 python -u dist_lm_sharded_train.py $(echo ${ARGS}) --cuda-id 7 --rank 0 \
     & sleep 2 ; \
 wait)
 
