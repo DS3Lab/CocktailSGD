@@ -127,6 +127,8 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
                 save_checkpoint(pipe, args, individual_dp_ckpt=False)
                 if do_sync_before_save:
                     pipe.dp_optim.rollback_parameters()
+                    
+                save_stream_dataloader_state_dict(train_data_loader, pipe, args)
             
             if pipe.global_step >= args.total_steps:
                 stop_flag.data[:] = 1
@@ -248,18 +250,19 @@ def main():
     
     print(device)
     
-    init_coordinator_client(args, None)
-    coord_client = get_coordinator_client()
-    res = coord_client.notify_inference_join(args.net_interface, args.n_gpu_per_node)
-    prime_ip = res['prime_ip']
-    rank = res['rank']
-    port = res['nccl_port']
+    if args.job_id != "0":
+        init_coordinator_client(args, None)
+        coord_client = get_coordinator_client()
+        res = coord_client.notify_inference_join(args.net_interface, args.n_gpu_per_node)
+        prime_ip = res['prime_ip']
+        rank = res['rank']
+        port = res['nccl_port']
 
-    print(f"job id: {args.job_id}")
-    print("<====Coordinator assigned prime-IP:", prime_ip, " and my assigned rank", rank, "====>")
-    
-    args.dist_url = f"tcp://{prime_ip}:{port}"
-    args.rank = rank
+        print(f"job id: {args.job_id}")
+        print("<====Coordinator assigned prime-IP:", prime_ip, " and my assigned rank", rank, "====>")
+
+        args.dist_url = f"tcp://{prime_ip}:{port}"
+        args.rank = rank
         
     init_communicators(args)
     
@@ -333,6 +336,9 @@ def main():
     
     if args.load_checkpoint:
         load_checkpoint(pipe, args)
+        
+        if get_pipeline_parallel_rank() == 0:
+            load_stream_dataloader_state_dict(train_data_loader, pipe, args)
 
     if args.fp16:
         pipe.optimizer.reload_model_params()

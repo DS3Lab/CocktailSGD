@@ -53,10 +53,14 @@ class StreamDatasetList(IterableDataset):
         self.it = None
         
     def state_dict(self):
-        return {}
+        return {n: ds.state_dict() for n, ds in zip(self.task_names, self.datasets)}
     
     def load_state_dict(self, state_dict):
-        pass
+        for n, ds in zip(self.task_names, self.datasets):
+            if n in state_dict:
+                ds.load_state_dict(state_dict[n])
+            else:
+                print('Warn: {n} is not in the state_dict')
         
     def get_sequence(self):
         
@@ -145,9 +149,16 @@ def name_to_dataset(task, tokenizer, args):
             data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         else:
-            from .pile import StreamDataset
-            data = load_dataset(task, split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
-            dataset = StreamDataset(data, tokenizer, args.seq_length)
+            from .mmap_data_utils import MMapIndexedDataset, PackedMMapIndexedDataset
+            data = MMapIndexedDataset(task)
+            dataset = PackedMMapIndexedDataset(
+                data, dp_rank=get_data_parallel_rank(), dp_group_size=get_data_parallel_world_size(),
+                seq_length=args.seq_length,
+            )
+        # else:
+        #     from .pile import StreamDataset
+        #     data = load_dataset(task, split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
+        #     dataset = StreamDataset(data, tokenizer, args.seq_length)
         
     return dataset
 
@@ -209,6 +220,7 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None, is_sh
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
+            prefetch_factor=16,
             collate_fn=None)
     else:
         train_data_loader = torch.utils.data.DataLoader(
@@ -217,6 +229,7 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None, is_sh
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
+            prefetch_factor=16,
             collate_fn=None)
     
     print('data_utils: get train_data_loader')

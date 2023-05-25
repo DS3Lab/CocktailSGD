@@ -190,7 +190,7 @@ def save_stream_dataloader_state_dict(dataloader, pipe, args):
     torch.save(
         dataloader.dataset.state_dict(),
         os.path.join(
-            checkpoint_step_path, f'dataset_state_dict.pt'
+            checkpoint_step_path, f'dataset_state_dict_{get_data_parallel_rank()}.pt'
         )
     )
     
@@ -202,11 +202,11 @@ def load_stream_dataloader_state_dict(dataloader, pipe, args):
     try:
         state_dict = torch.load(
             os.path.join(
-                checkpoint_step_path, f'dataset_state_dict.pt'
+                checkpoint_step_path, f'dataset_state_dict_{get_data_parallel_rank()}.pt'
             )
         )
 
-        dataloader.data.load_state_dict(state_dict)
+        dataloader.dataset.load_state_dict(state_dict)
     
     except Exception as e:
         
