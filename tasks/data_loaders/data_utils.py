@@ -147,7 +147,7 @@ def name_to_dataset(task, tokenizer, args):
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         else:
             from .mmap_data_utils import MMapIndexedDataset, PackedMMapIndexedDataset
-            data = MMapIndexedDataset(task)
+            data = MMapIndexedDataset(task, skip_warmup=True)
             dataset = PackedMMapIndexedDataset(
                 data, dp_rank=get_data_parallel_rank(), dp_group_size=get_data_parallel_world_size(),
                 seq_length=args.seq_length,
