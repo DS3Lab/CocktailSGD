@@ -47,7 +47,7 @@ export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
 export WANDB_NAME=RP-7B-40K-wiki
 export WANDB_ENTITY=asdfffjj
-export WANDB_DISABLED=0
+export WANDB_DISABLED=1
 
 export QUANT_BITS=4
 export TOPK_RATIO=0.2
@@ -62,7 +62,7 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_7b_700bt_40K_fix_RP_neomix_
 --model-type flash_gptneox \
 --optimizer fusedadam \
 --seed 42 \
---task-name /var/cr01_data/tokenized/to_target/wiki_en_to_target_128 \
+--task-name /var/cr01_data/tokenized_data/to_target/wiki_en_to_target_128_text_document \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
