@@ -100,9 +100,9 @@ def train_loop(args, pipe, device, train_data_loader, test_data_loader):
         
         for i, data in enumerate(train_data_loader):
             
-            if i < pipe.global_step:
-                print(f"Skip step {i}...")
-                continue
+            # if i < pipe.global_step:
+            #     print(f"Skip step {i}...")
+            #     continue
                 
             if use_dp:
                 get_data_parallel_comm().broadcast(stop_flag, 0)
