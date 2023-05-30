@@ -110,13 +110,20 @@ def name_to_dataset(task, tokenizer, args):
         if task == 'natural_instructions' or task == 'ni':
             from .natural_instructions import StreamDataset
             dataset = StreamDataset('./natural-instructions/', tokenizer, args.seq_length)
+        elif task == 'ni_dehelm':
+            from .natural_instructions_dehelm import StreamDataset
+            dataset = StreamDataset('./natural-instructions/', tokenizer, args.seq_length)
         elif task == 'p3':
             from .p3 import StreamDataset
             data = load_dataset("Muennighoff/P3", split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
+        elif task == 'p3_dehelm':
+            from .p3 import StreamDataset
+            data = load_dataset("json", data_files="./P3_dehelm.jsonl", split="train").shuffle(seed=args.seed)
+            dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'pile':
             from .pile import StreamDataset
-            data = load_dataset('EleutherAI/pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
+            data = load_dataset('EleutherAI/pile', split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed).with_format("torch")
             # data = load_dataset('EleutherAI/pile', split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'cot':
