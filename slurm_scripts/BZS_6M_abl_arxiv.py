@@ -62,7 +62,7 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
 --model-type flash_gptneox \
 --optimizer fusedadam \
 --seed 42 \
---task-name /var/cr01_data/tokenized_data/to_target/arxiv_en_to_target_128_text_document \
+--task-name /var/cr01_data/tokenized_data/to_target/arxiv_to_target_128_text_document \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
