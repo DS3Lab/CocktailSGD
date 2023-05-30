@@ -4,7 +4,7 @@ import uuid
 import time
 
 template = '''#!/bin/bash
-#SBATCH --job-name=arxiv
+#SBATCH --job-name=book
 #SBATCH --time=999:59:00
 #SBATCH --output=/var/cr01_data/logs/slurm_%j.log
 #SBATCH --exclusive
@@ -45,7 +45,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-1TT-arxiv-boost
+export WANDB_NAME=RP-1TT-book-boost
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -62,7 +62,7 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
 --model-type flash_gptneox \
 --optimizer fusedadam \
 --seed 42 \
---task-name /var/cr01_data/tokenized_data/to_target/arxiv_to_target_16_text_document \
+--task-name /var/cr01_data/tokenized_data/to_target/book_to_target_16_text_document \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
