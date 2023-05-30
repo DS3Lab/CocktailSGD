@@ -45,7 +45,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-40K-stackexchange
+export WANDB_NAME=RP-1TT-stackexchange-boost
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
@@ -55,21 +55,21 @@ export RANDOMP_RATIO=0.1
 
 export SHOW_DATA=0
 
-ARGS="--model-name /var/cr01_data/_root_fm_models_rp_7b_700bt_40K_fix_RP_neomix_cocktail \
---tokenizer-name /var/cr01_data/_root_fm_models_rp_7b_700bt_40K_fix_RP_neomix_cocktail \
+ARGS="--model-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
+--tokenizer-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
 --load-pretrained-model true \
 --project-name redpajama \
 --model-type flash_gptneox \
 --optimizer fusedadam \
 --seed 42 \
---task-name /var/cr01_data/tokenized_data/to_target/stackexchange_to_target_128_text_document \
+--task-name /var/cr01_data/tokenized_data/to_target/stackexchange_en_to_target_128_text_document \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 4096 \
 --initial-loss-scale 4096 \
 --total-steps 159000 --warmup-steps 10 --train-warmup-steps 0 \
---stop-steps 159000 \
---checkpoint-steps 1000 \
---lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 8 \
+--stop-steps 2001 \
+--checkpoint-steps 200 \
+--lr 1e-5 --seq-length 2048 --batch-size 64 --micro-batch-size 2 --gradient-accumulate-step 6 \
 --dist-url tcp://${master_ip}:8951 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
@@ -102,9 +102,9 @@ if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
     pp_degree=4
-    dp_degree=2
+    dp_degree=8
     n_layer_per_device=8
-    node_size=1
+    node_size=4
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
