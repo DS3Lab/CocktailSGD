@@ -53,7 +53,9 @@ class StreamDatasetList(IterableDataset):
         self.it = None
         
     def state_dict(self):
-        return {n: ds.state_dict() for n, ds in zip(self.task_names, self.datasets)}
+        return {
+            n: ds.state_dict() for n, ds in zip(self.task_names, self.datasets) if hasattr(ds, 'state_dict')
+        }
     
     def load_state_dict(self, state_dict):
         for n, ds in zip(self.task_names, self.datasets):
@@ -143,7 +145,8 @@ def name_to_dataset(task, tokenizer, args):
                 from .p3 import StreamDataset
             else:
                 from .pile import StreamDataset
-            data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=100_000, seed=args.seed)
+            # data = load_dataset("json", data_files=task, split="train", streaming=True).shuffle(buffer_size=1000_000, seed=args.seed)
+            data = load_dataset("json", data_files=task, split="train", streaming=False).shuffle()
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         else:
             from .mmap_data_utils import MMapIndexedDataset, PackedMMapIndexedDataset
