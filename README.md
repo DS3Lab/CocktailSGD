@@ -7,14 +7,22 @@
 - Install PyTorch env: 
 
 ```shell
+conda create -n cocktail python=3.10
+conda activate cocktail
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 conda install -c conda-forge cupy nccl cudatoolkit=11.8
+```
 
-pip install transformers
-pip install datasets
-pip install netifaces
-pip install zstandard
-pip install wandb
+or managing packages with `mamba`:
+```shell
+mamba create -n cocktail python=3.10
+mamba activate cocktail
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+mamba install -c conda-forge cupy nccl cudatoolkit=11.8
+```
+And then install other requirements:
+```shell
+pip install -r requirements.txt
 ```
 
 As we use wandb to manage experiments, one should also configure `wandb` before running the code

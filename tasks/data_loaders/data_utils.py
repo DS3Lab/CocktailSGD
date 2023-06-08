@@ -79,6 +79,13 @@ def name_to_dataset(task, tokenizer, args):
             from .p3 import StreamDataset
             data = load_dataset("Muennighoff/P3", split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
+        elif task == 'natural_instructions_dehelm' or task == 'ni_dehelm':
+            from .natural_instructions_dehelm import StreamDataset
+            dataset = StreamDataset('./natural-instructions-dehelm/', tokenizer, args.seq_length)
+        elif task == 'p3_dehelm':
+            from .p3 import StreamDataset
+            data = load_dataset('togethercomputer/RedPajama-Instruct-Data', data_files='data/P3_decontaminated.jsonl.zst', split='train').shuffle(seed=args.seed)
+            dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'pile':
             from .pile import StreamDataset
             data = load_dataset('the_pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
@@ -157,6 +164,7 @@ def get_train_data_loader(args, tokenizer, num_workers=1, state_dict=None):
                                                     shuffle=False,
                                                     num_workers=num_workers,
                                                     pin_memory=True,
+                                                    prefetch_factor=16,
                                                     collate_fn=None)
     
     print('data_utils: get train_data_loader')

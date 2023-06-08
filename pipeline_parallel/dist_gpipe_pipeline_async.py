@@ -38,6 +38,10 @@ def create_optimizer(model, optimizer_type, weight_decay=0.01, learning_rate=2e-
     elif optimizer_type == '8bit-adam':
         from bitsandbytes.optim import Adam8bit as AdamW
         print('>>>>> using 8bit-Adam')
+    elif optimizer_type == 'fusedadam':
+        import apex
+        AdamW = apex.optimizers.FusedAdam
+        print('>>>>> using Apex FusedAdam')
     else:
         assert False
     
@@ -538,6 +542,7 @@ class GpipeAsync:
                         #                     'scale': self.optimizer.get_loss_scale(), ##todo
                     }, step=self.global_step,
                 )
+                print(f"step: {self.global_step}, loss: {sum(tr_loss)/len(tr_loss):.6f}, lr: {self.scheduler.get_last_lr()[0]:.6f}")
                 print("logging...")
                 if hasattr(self, 'experiment'):
                     self.experiment.log_metrics({
@@ -777,4 +782,3 @@ class GpipeAsync:
                 output_.append(outputs)
         torch.cuda.synchronize()
         # self.comm.barrier()
-
