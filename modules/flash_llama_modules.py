@@ -552,7 +552,7 @@ class LlamaAttention(nn.Module):
             q, k, v = qkv.unbind(2)
             attn_output = xops.memory_efficient_attention(q, k, v, attn_bias=xops.LowerTriangularMask())
             
-        attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
+        attn_output = attn_output.view(bsz, q_len, self.num_heads * self.head_dim)
         attn_output = self.o_proj(attn_output)
 
         return attn_output, None, None
