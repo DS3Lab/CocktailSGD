@@ -7,49 +7,28 @@
 - Install PyTorch env: 
 
 ```shell
-conda install pytorch torchvision torchaudio pytorch-cuda=11.6 -c pytorch -c nvidia
-conda install -c conda-forge cupy nccl cudatoolkit=11.6
+conda create -n cocktail python=3.10
+conda activate cocktail
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install -c conda-forge cupy nccl cudatoolkit=11.8
+```
 
-pip install transformers==4.21.1
-pip install datasets
-pip install netifaces
-pip install zstandard
-pip install wandb
+or managing packages with `mamba`:
+```shell
+mamba create -n cocktail python=3.10
+mamba activate cocktail
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+mamba install -c conda-forge cupy nccl cudatoolkit=11.8
+```
+And then install other requirements:
+```shell
+pip install -r requirements.txt
 ```
 
 As we use wandb to manage experiments, one should also configure `wandb` before running the code
 ```shell
 wandb login
 ```
-
-### (Optional) Install bitsandbytes for 8bit Adam
-
-```shell
-pip install bitsandbytes # optional, to use 8bit-adam
-```
-
-### (Optional) Install FlashAttention
-
-https://github.com/HazyResearch/flash-attention
-
-```shell
-pip install flash-attn
-```
-
-In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
-
-We now integrate flash attention to OPT models. Please set `--model-type flash_opt` to use it .
-
-### (Optional) Install Nvidia Apex
-
-```
-git clone https://github.com/NVIDIA/apex.git
-cd apex
-pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
-```
-
-In case compiling error, try set `CUDA_HOME`, e.g.~`export CUDA_HOME=/usr/local/cuda-11.6`
-
 
 ### (2) Download Pretrained Models
 
@@ -78,7 +57,6 @@ After that, run the corresponding process on each GPU node.
 # run on each GPU node
 python dist_lm_train.py ... --cuda-id 0 --rank ${GLOBAL_RANK}
 ```
-
 
 ## Arguments
 
@@ -127,3 +105,55 @@ The following arguments usually do not change:
 - `--fp16`: Flag to enable FP16 mixed precision training. Should always adding it for the current impl.
 - `--pp-mode`: always `gpipe`
 - `--profiling`: {no-profiling, tidy_profiling}. `tidy_profiling` will generate profile jsons.
+
+
+
+## Optional Package
+
+### Install bitsandbytes for 8bit Adam
+
+```shell
+pip install bitsandbytes # optional, to use 8bit-adam
+```
+
+### Install FlashAttention
+
+https://github.com/HazyResearch/flash-attention
+
+Install FlashAttention
+```shell
+export CUDA_HOME=/usr/local/cuda-11.8
+git clone https://github.com/HazyResearch/flash-attention.git
+cd flash-attention
+git checkout tags/v1.0.4
+pip install .
+cd ..
+```
+
+Install other optimized kernels:
+```shell
+cd flash-attention/csrc/rotary
+pip install .
+cd ../..
+```
+
+### Install Xformers
+
+```shell
+export CUDA_HOME=/usr/local/cuda-11.8
+git clone https://github.com/facebookresearch/xformers.git
+cd xformers
+git submodule update --init --recursive
+pip install .
+cd ..
+```
+
+### Install Nvidia Apex
+
+```shell
+export CUDA_HOME=/usr/local/cuda-11.8
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+cd ..
+```

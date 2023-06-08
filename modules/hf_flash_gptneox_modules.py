@@ -14,33 +14,42 @@ from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXMLP
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXLayer as _GPTNeoXBlock
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXModel as _GPTNeoXModel
 from transformers.models.gpt_neox.configuration_gpt_neox import GPTNeoXConfig as GPTConfig
-from transformers.models.gpt_neox.modeling_gpt_neox import RotaryEmbedding
+# from transformers.models.gpt_neox.modeling_gpt_neox import RotaryEmbedding
 
+from flash_attn.layers.rotary import RotaryEmbedding
 try:
     from flash_attn.flash_attention import FlashAttention
     flash_attn_installed = True
     print('>>>>> flash attention')
-except ImportError:
+except:
     flash_attn_installed = False
+
+try:
+    import apex.contrib.layer_norm
+    # LayerNorm = apex.normalization.FusedLayerNorm
+    LayerNorm = apex.contrib.layer_norm.FastLayerNorm
+    print('>>>>> Apex FastLayerNorm')
+except:
+    LayerNorm = nn.LayerNorm
+    
+try:
+    import apex.fused_dense
+    def _fused_dense_gelu_dense(input, weight1, bias1, weight2, bias2):
+        return apex.fused_dense.FusedDenseGeluDenseFunc.apply(input, weight1, bias1, weight2, bias2)
+    fused_dense_installed = True
+    print('>>>>> Apex FusedDenseGeluDense')
+except:
+    fused_dense_installed = False
+    
+try:
+    import xformers.ops as xops
+    xops_installed = True
+    print('>>>>> Xformers installed')
+except:
+    xops_installed = False
     
 
-def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
-
-def apply_rotary_pos_emb(q, k, cos, sin, offset = 0):
-    if isinstance(offset, torch.Tensor):
-        realidx = torch.arange(q.shape[-2], device=q.device).view(1, q.shape[-2]) + offset[:, None]
-        cos = cos.squeeze(0).squeeze(0)[realidx].view(offset.size(0), 1, q.shape[-2], cos.size(-1))
-        sin = sin.squeeze(0).squeeze(0)[realidx].view(offset.size(0), 1, q.shape[-2], sin.size(-1))
-    else:
-        cos = cos[..., offset : q.shape[-2] + offset, :]
-        sin = sin[..., offset : q.shape[-2] + offset, :]
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed, k_embed
+from einops import rearrange
 
 class GPTNeoXAttention(_GPTNeoXAttention):
     
@@ -58,9 +67,7 @@ class GPTNeoXAttention(_GPTNeoXAttention):
             ),
         )
         self.register_buffer("masked_bias", torch.tensor(-1e9))
-        self.rotary_emb = RotaryEmbedding(
-            self.rotary_ndims, config.max_position_embeddings, base=config.rotary_emb_base
-        )
+        self.rotary_emb = RotaryEmbedding(self.rotary_ndims, base=config.rotary_emb_base, interleaved=False)
         self.register_buffer(
             "norm_factor",
             torch.sqrt(torch.tensor(self.head_size, dtype=torch.float32)).to(torch.get_default_dtype()),
@@ -83,76 +90,29 @@ class GPTNeoXAttention(_GPTNeoXAttention):
         output_attentions=False,
     ):
         has_layer_past = layer_past is not None
+        
+        bsz, tgt_len, _ = hidden_states.shape
 
         # Compute QKV
         # Attention heads [batch, seq_len, hidden_size]
         #   --> [batch, seq_len, (np * 3 * head_size)]
         qkv = self.query_key_value(hidden_states)
-
-        # [batch, seq_len, (num_heads * 3 * head_size)]
-        #   --> [batch, seq_len, num_heads, 3 * head_size]
-        new_qkv_shape = qkv.size()[:-1] + (self.num_attention_heads, 3 * self.head_size)
-        qkv = qkv.view(*new_qkv_shape)
-
-        # [batch, seq_len, num_attention_heads, 3 * head_size] --> 3 [batch, num_attention_heads, seq_len, head_size]
-        query = qkv[..., : self.head_size].permute(0, 2, 1, 3)
-        key = qkv[..., self.head_size : 2 * self.head_size].permute(0, 2, 1, 3)
-        value = qkv[..., 2 * self.head_size :].permute(0, 2, 1, 3)
-
-        # Compute rotary embeddings on rotary_ndims
-        query_rot = query[..., : self.rotary_ndims]
-        query_pass = query[..., self.rotary_ndims :]
-        key_rot = key[..., : self.rotary_ndims]
-        key_pass = key[..., self.rotary_ndims :]
-
-        # Compute token offset for rotary embeddings (when decoding)
-        seq_len = key.shape[-2]
         
-        if layer_past is not None:
-            if offset is None:
-                offset = layer_past[0].shape[-2]
-            seq_len += layer_past[0].shape[-2]
-            
-        if offset is None:
-            offset = 0
+        attn_weights = None
+        present = None
         
-        cos, sin = self.rotary_emb(value, seq_len=seq_len)
-        query, key = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, offset=offset)
-        query = torch.cat((query, query_pass), dim=-1)
-        key = torch.cat((key, key_pass), dim=-1)
-
-        # Cache QKV values
-        if has_layer_past:
-            past_key = layer_past[0]
-            past_value = layer_past[1]
-            key = torch.cat((past_key, key), dim=-2)
-            value = torch.cat((past_value, value), dim=-2)
-        present = None if use_cache else (key, value)
-
-        # Compute attention
-        if flash_attn_installed:
-            
-            query = query.permute(0, 2, 1, 3).half()
-            key = key.permute(0, 2, 1, 3).half()
-            value = value.permute(0, 2, 1, 3).half()
-            qkv = torch.stack(
-                [
-                    query.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                    key.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                    value.reshape((bsz, tgt_len, self.num_attention_heads, self.head_size)),
-                ],
-                dim=2
-            )
-
-            attn_weights = None
+        qkv = rearrange(qkv, '... (h three d) -> ... h three d', three=3, d=self.head_size)
+        qkv = qkv.permute(0, 1, 3, 2, 4)
+        qkv = self.rotary_emb(qkv)
+        
+        if not xops_installed:
+            # Compute attention
             attn_output, _ = self.flash_attn(qkv, causal=True)
-            attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
         else:
-            attn_output, attn_weights = self._attn(query, key, value,
-                                                   attention_mask, head_mask)
-            # Reshape outputs
-            attn_output = self._merge_heads(attn_output, self.num_attention_heads,
-                                            self.head_size)
+            q, k, v = qkv.unbind(2)
+            attn_output = xops.memory_efficient_attention(q, k, v, attn_bias=xops.LowerTriangularMask())
+            
+        attn_output = attn_output.view(bsz, tgt_len, self.num_attention_heads * self.head_size)
         attn_output = self.dense(attn_output)
 
         outputs = (attn_output, present)
@@ -160,53 +120,6 @@ class GPTNeoXAttention(_GPTNeoXAttention):
             outputs += (attn_weights,)
 
         return outputs
-
-    # fix nan problem
-    def _attn(self, query, key, value, attention_mask=None, head_mask=None):
-        # q, k, v: [bs, num_attention_heads, seq_len, attn_head_size]
-        # compute causal mask from causal mask buffer
-        batch_size, num_attention_heads, query_length, attn_head_size = query.size()
-        key_length = key.size(-2)
-
-        causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length].bool()
-
-        query = query.view(batch_size * num_attention_heads, query_length, attn_head_size)
-        key = key.view(batch_size * num_attention_heads, key_length, attn_head_size)
-        attn_scores = torch.zeros( # empty sometimes gives nan
-            batch_size * num_attention_heads,
-            query_length,
-            key_length,
-            dtype=query.dtype,
-            device=key.device,
-        )
-        attn_scores = torch.baddbmm(
-            attn_scores,
-            query,
-            key.transpose(1, 2),
-            beta=0.0,
-            alpha=(1.0 / self.norm_factor),
-        )
-        attn_scores = attn_scores.view(batch_size, num_attention_heads, query_length, key_length)
-
-        mask_value = torch.finfo(attn_scores.dtype).min
-        # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
-        # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
-        mask_value = torch.tensor(mask_value, dtype=attn_scores.dtype).to(attn_scores.device)
-        attn_scores = torch.where(causal_mask, attn_scores, mask_value)
-
-        if attention_mask is not None:
-            # Apply the attention mask
-            attn_scores = attn_scores + attention_mask
-
-        attn_weights = nn.functional.softmax(attn_scores, dim=-1)
-        attn_weights = attn_weights.to(value.dtype)
-
-        # Mask heads if we want to
-        if head_mask is not None:
-            attn_weights = attn_weights * head_mask
-
-        attn_output = torch.matmul(attn_weights, value)
-        return attn_output, attn_weights
 
 
 class GPTEmbeddings(nn.Module):
@@ -230,6 +143,7 @@ class GPTEmbeddings(nn.Module):
             print(f'Cannot load from <model_path>. The model is randomly initialized.')
         return module
         
+    #@torch.compile
     def forward(self, input_ids, *args, **kargs):
         
         # input ids
@@ -242,35 +156,59 @@ class GPTEmbeddings(nn.Module):
 class GPTBlock(_GPTNeoXBlock):
     def __init__(self, config, *args, use_checkpoint=True, **kargs):
         super(_GPTNeoXBlock, self).__init__()
-        self.input_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.post_attention_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.input_layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.post_attention_layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.attention = GPTNeoXAttention(config)
         self.mlp = GPTNeoXMLP(config)
         self.config = config
         self.use_checkpoint = use_checkpoint
         
-        def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
-                          prefix_masks: torch.Tensor) -> torch.Tensor:
-            res = x
-            """
-            To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
-            """
-            layer_norm_out = self.input_layernorm(x)
-            attention_layer_output = self.attention(layer_norm_out, attention_mask=attention_mask)
+        def mha_fw(x: torch.Tensor, res: torch.Tensor, attention_mask: torch.Tensor):
+            attention_layer_output = self.attention(self.input_layernorm(x), attention_mask=attention_mask)
             attn_output = attention_layer_output[0]
-            # outputs = attention_layer_output[1:]
+            return attn_output + res
+        
+        # @torch.compile()
+        def mlp_fw(x: torch.Tensor, res: torch.Tensor):
+            if fused_dense_installed:
+                shape = x.shape
+                x = self.post_attention_layernorm(x)
+                x = x.view(-1, config.hidden_size)
+                mlp_out = _fused_dense_gelu_dense(
+                    x, 
+                    self.mlp.dense_h_to_4h.weight,
+                    self.mlp.dense_h_to_4h.bias,
+                    self.mlp.dense_4h_to_h.weight,
+                    self.mlp.dense_4h_to_h.bias,
+                ).view(shape)
+            else:
+                mlp_out = self.mlp(self.post_attention_layernorm(x))
+            return mlp_out + res
+        
+        """
+        To be compatible with https://github.com/huggingface/transformers/blob/a0ae2310ec46a2c592950babc85cf02e325bf6a7/src/transformers/models/gpt_neox/modeling_gpt_neox.py#L336-L347
+        """
+        if self.config.use_parallel_residual:
+            # @torch.compile()
+            def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
+                              prefix_masks: torch.Tensor) -> torch.Tensor:
+                attn_output = mha_fw(x, res=x, attention_mask=attention_mask)
 
-            if self.config.use_parallel_residual:
                 # x = x + attn(ln1(x)) + mlp(ln2(x))
                 # x_a = attn_output, 
-                mlp_out = self.mlp(self.post_attention_layernorm(x))
-                return res + attn_output + mlp_out
-            else:
+                mlp_out = mlp_fw(x, res=attn_output)
+                return mlp_out
+        else:
+            # @torch.compile()
+            def block_forward(x: torch.Tensor, attention_mask: torch.Tensor,
+                              prefix_masks: torch.Tensor) -> torch.Tensor:
+                
+                attn_output = mha_fw(x, res=x, attention_mask=attention_mask)
+                
                 # x = x + attn(ln1(x)) 
                 # x = x + mlp(ln2(x))
-                attn_output = attn_output + x
-                mlp_out = self.mlp(self.post_attention_layernorm(attn_output))
-                return attn_output + mlp_out
+                mlp_out = mlp_fw(attn_output, res=attn_output)
+                return mlp_out
 
         self.block_forward = block_forward
 
@@ -295,17 +233,6 @@ class GPTBlock(_GPTNeoXBlock):
             attention_mask = 1e9*(mask[:, None, None, :]-1)
         else:
             attention_mask = None
-            
-        if mask is None:
-            if layer_past is not None:
-                offset = layer_past[0].size(2)
-            else:
-                offset = 0
-        else:
-            # masked tokens
-            offset = (mask-1).sum(-1, keepdims=False)
-            if layer_past is not None:
-                offset += layer_past[0].size(2)
                 
         if self.training:
             
@@ -313,7 +240,7 @@ class GPTBlock(_GPTNeoXBlock):
                 x.requires_grad_(True)
                 x = checkpoint(self.block_forward, x, attention_mask, None)
             else:
-                x = self.block_forward(x, prefix_masks=prefix_masks)
+                x = self.block_forward(x, attention_mask, None)
             
             return x
            
@@ -336,7 +263,7 @@ class GPTBlock(_GPTNeoXBlock):
 class GPTLMHead(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.final_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.final_layer_norm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.embed_out = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         
     @classmethod
@@ -352,6 +279,7 @@ class GPTLMHead(nn.Module):
             print('Cannot load from <model_name>. The model is randomly initialized.')
         return module
         
+    #@torch.compile
     def forward(self, x, *args, **kargs):
         x = self.final_layer_norm(x)
         x = self.embed_out(x)
