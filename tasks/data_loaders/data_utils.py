@@ -88,7 +88,7 @@ def name_to_dataset(task, tokenizer, args):
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'pile':
             from .pile import StreamDataset
-            data = load_dataset('the_pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
+            data = load_dataset('EleutherAI/pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
             # data = load_dataset('the_pile', split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'cot':
