@@ -133,6 +133,7 @@ pip install .
 export CUDA_HOME=/usr/local/cuda-11.8
 git clone https://github.com/facebookresearch/xformers.git
 cd xformers
+git submodule update --init --recursive
 pip install .
 ```
 
