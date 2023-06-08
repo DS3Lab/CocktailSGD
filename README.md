@@ -117,6 +117,7 @@ Install FlashAttention
 export CUDA_HOME=/usr/local/cuda-11.8
 git clone https://github.com/HazyResearch/flash-attention.git
 cd flash-attention
+git checkout tags/v1.0.4
 pip install .
 ```
 
