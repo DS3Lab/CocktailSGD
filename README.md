@@ -125,13 +125,16 @@ Install FlashAttention
 export CUDA_HOME=/usr/local/cuda-11.8
 git clone https://github.com/HazyResearch/flash-attention.git
 cd flash-attention
+git checkout tags/v1.0.4
 pip install .
+cd ..
 ```
 
 Install other optimized kernels:
 ```shell
 cd flash-attention/csrc/rotary
 pip install .
+cd ../..
 ```
 
 ### Install Xformers
@@ -140,7 +143,9 @@ pip install .
 export CUDA_HOME=/usr/local/cuda-11.8
 git clone https://github.com/facebookresearch/xformers.git
 cd xformers
+git submodule update --init --recursive
 pip install .
+cd ..
 ```
 
 ### Install Nvidia Apex
@@ -150,4 +155,5 @@ export CUDA_HOME=/usr/local/cuda-11.8
 git clone https://github.com/NVIDIA/apex.git
 cd apex
 pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+cd ..
 ```
