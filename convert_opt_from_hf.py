@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert HF checkpoints')
     parser.add_argument('--model-name', type=str, default='facebook/opt-1.3b', 
                         help='model-name')
-    parser.add_argument('--save-path', type=str, default='./pretrained_models', 
+    parser.add_argument('--save-path', type=str, default=None, 
                         help='model-name')
     args = parser.parse_args()
     
