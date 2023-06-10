@@ -51,6 +51,10 @@ class StreamDatasetList(IterableDataset):
                     
                     inputs = next(it)
                     
+                    if inputs['input_ids'].size(0) != self.seq_length:
+                        print('!!', inputs['input_ids'].shape)
+                        continue
+                    
                     if SHOW_DATA:
                         if global_i % self.print_sample_every_n == 0:
                             print(p, th)
