@@ -16,6 +16,7 @@ mamba install -c conda-forge cupy nccl cudatoolkit=11.8 -y
 
 pip install --upgrade pip
 pip install --no-input transformers
+pip install --no-input sentencepiece
 pip install --no-input datasets
 pip install --no-input netifaces
 pip install --no-input zstandard
