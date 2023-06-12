@@ -95,6 +95,10 @@ def name_to_dataset(task, tokenizer, args):
             data = load_dataset('EleutherAI/pile', split="train", streaming=True).shuffle(buffer_size=10_000, seed=args.seed).with_format("torch")
             # data = load_dataset('the_pile', split="train").shuffle(seed=args.seed)
             dataset = StreamDataset(data, tokenizer, args.seq_length)
+        elif task == 'rp_sample':
+            from .pile import StreamDataset
+            data = load_dataset('togethercomputer/RedPajama-Data-1T-Sample', split="train").shuffle(seed=args.seed).with_format("torch")
+            dataset = StreamDataset(data, tokenizer, args.seq_length)
         elif task == 'cot':
             from .cot import StreamDataset
             dataset = StreamDataset('./data/mmlu-cot.json', tokenizer, args.seq_length)

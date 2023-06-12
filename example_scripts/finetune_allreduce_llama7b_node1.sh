@@ -1,5 +1,5 @@
 
-export WANDB_NAME=llama-7b-instruct-two-nodes
+export WANDB_NAME=llama-7b-instruct-rp
 
 netif=enp19s0
 master_ip=172.27.6.23
@@ -18,7 +18,7 @@ ARGS="--model-name ./llama-7b-shard \
 --optimizer adam \
 --seed 42 \
 --load-pretrained-model true \
---task-name ni_dehelm:0.2,p3_dehelm:0.2,pile:0.6 \
+--task-name ni_dehelm:0.2,p3_dehelm:0.2,rp_sample:0.6 \
 --checkpoint-path ./model_ckpts/$WANDB_NAME \
 --num-layers 8 --embedding-dim 4096 \
 --total-steps 10000 --warmup-steps 10 --train-warmup-steps 0 \
