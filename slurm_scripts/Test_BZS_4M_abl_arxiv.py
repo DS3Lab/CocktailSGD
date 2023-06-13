@@ -74,8 +74,8 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_3b_800b_real_fp16 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
 --fp16 \
---dp-backend nccl \
---dp-mode allreduce \
+--dp-backend gloo \
+--dp-mode cocktail_sgd \
 --pp-mode gpipe --profiling no-profiling"
 
 (trap 'kill 0' SIGINT; \
@@ -117,4 +117,4 @@ if __name__ == '__main__':
     for i in range(node_size):
         os.system('sbatch slurm_scripts/train_to_submit.slurm.sh')
         if i == 0:
-            time.sleep(6)
+            time.sleep(1)
