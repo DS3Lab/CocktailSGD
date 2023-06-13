@@ -21,13 +21,14 @@ from flash_attn.flash_attention import FlashAttention
 flash_attn_installed = True
 print('>>>>> flash attention')
 
-try:
-    import apex.contrib.layer_norm
-    # LayerNorm = apex.normalization.FusedLayerNorm
-    LayerNorm = apex.contrib.layer_norm.FastLayerNorm
-    print('>>>>> Apex FastLayerNorm')
-except:
-    LayerNorm = nn.LayerNorm
+# try:
+#     import apex.contrib.layer_norm
+#     # LayerNorm = apex.normalization.FusedLayerNorm
+#     LayerNorm = apex.contrib.layer_norm.FastLayerNorm
+#     print('>>>>> Apex FastLayerNorm')
+# except:
+#     LayerNorm = nn.LayerNorm
+LayerNorm = nn.LayerNorm
     
 try:
     import apex.fused_dense
