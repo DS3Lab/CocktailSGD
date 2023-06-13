@@ -29,8 +29,8 @@ def get_parameter_names(model, forbidden_layer_types):
     return result
 
 
-def create_optimizer(model, optimizer_type, weight_decay=0.01, learning_rate=2e-5,
-                     adam_beta1=0.9, adam_beta2=0.999, adam_epsilon=1e-6):
+def create_optimizer(model, optimizer_type, weight_decay=0.1, learning_rate=2e-5,
+                     adam_beta1=0.9, adam_beta2=0.95, adam_epsilon=1e-6):
     
     if optimizer_type == 'adamw' or optimizer_type == 'adam':
         from torch.optim import AdamW
