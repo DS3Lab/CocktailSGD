@@ -159,7 +159,7 @@ ARGS="--model-name /var/cr01_data/RedPajama-Code-1B \
 --total-steps 262144 --warmup-steps 1000 --train-warmup-steps 0 \
 --stop-steps 262145 \
 --checkpoint-steps 1000 \
---lr 2e-4 --seq-length 8192 --batch-size 16 --micro-batch-size 16 --gradient-accumulate-step 1 \
+--lr 2e-4 --seq-length 8192 --batch-size 16 --micro-batch-size 16 --gradient-accumulate-step 4 \
 --dist-url tcp://${master_ip}:8956 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
@@ -194,9 +194,9 @@ if __name__ == '__main__':
 
     job_id = str(uuid.uuid4())
     pp_degree=1
-    dp_degree=32
+    dp_degree=8
     n_layer_per_device=16
-    node_size=4
+    node_size=1
 
     template = template.replace('{{JOB_ID}}', job_id)
     template = template.replace('{{PP_DEGREE}}', str(pp_degree))
