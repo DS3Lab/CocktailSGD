@@ -4,7 +4,7 @@ import uuid
 import time
 
 template = '''#!/bin/bash
-#SBATCH --job-name=bzs_6m_lr_1e5
+#SBATCH --job-name=code_train
 #SBATCH --time=999:59:00
 #SBATCH --output=/var/cr01_data/logs/slurm_%j.log
 #SBATCH --exclusive
@@ -43,7 +43,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-1T-further
+export WANDB_NAME=RP-Code-1B
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
