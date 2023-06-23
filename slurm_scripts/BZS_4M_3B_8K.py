@@ -53,6 +53,9 @@ export RANDOMP_RATIO=0.1
 
 export SHOW_DATA=0
 
+mkdir -p /work/data
+rsync -av /var/cr01_data/tokenized_data /work/data/
+
 ARGS="--model-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
 --tokenizer-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
 --load-pretrained-model true \
@@ -61,7 +64,7 @@ ARGS="--model-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
 --optimizer fusedadam \
 --seed 42 \
 --task-name \
-/var/cr01_data/tokenized_data/c4/c4_tokenized_text_document:0.46 \
+/work/data/tokenized_data/c4/c4_tokenized_text_document:0.46 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 1 \
 --initial-loss-scale 4096 \
