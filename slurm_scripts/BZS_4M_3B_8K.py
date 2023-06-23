@@ -43,7 +43,7 @@ netif=enp12s0
 master_ip=172.27.6.25
 export GLOO_SOCKET_IFNAME=${netif}
 export NCCL_SOCKET_IFNAME=${netif}
-export WANDB_NAME=RP-7B-1T-further
+export WANDB_NAME=RP-3B-8K
 export WANDB_ENTITY=asdfffjj
 export WANDB_DISABLED=1
 
