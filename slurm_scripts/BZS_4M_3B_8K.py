@@ -53,8 +53,8 @@ export RANDOMP_RATIO=0.1
 
 export SHOW_DATA=0
 
-ARGS="--model-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
---tokenizer-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
+ARGS="--model-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
+--tokenizer-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
 --load-pretrained-model true \
 --project-name redpajama \
 --model-type flash_gptneox \
