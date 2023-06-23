@@ -67,7 +67,7 @@ ARGS="--model-name /var/cr01_data/models/RedPajama-INCITE-Base-3B-v1-shard \
 --initial-loss-scale 4096 \
 --total-steps 200000 --warmup-steps 100 --train-warmup-steps 0 \
 --stop-steps 200001 \
---checkpoint-steps 10000 \
+--checkpoint-steps 1000 \
 --lr 1e-5 --seq-length 8192 --batch-size 4 --micro-batch-size 4 --gradient-accumulate-step 4 \
 --dist-url tcp://${master_ip}:8956 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
