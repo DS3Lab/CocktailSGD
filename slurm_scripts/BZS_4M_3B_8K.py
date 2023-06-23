@@ -61,14 +61,14 @@ ARGS="--model-name /var/cr01_data/_root_fm_models_rp_1t_real_fp16 \
 --optimizer fusedadam \
 --seed 42 \
 --task-name \
-/var/cr01_data/tokenized_data/c4_tokenized_text_document:0.46 \
+/var/cr01_data/tokenized_data/c4/c4_tokenized_text_document:0.46 \
 --checkpoint-path /var/cr01_data/model_ckpts/$WANDB_NAME \
 --num-layers {{N_LAYER_PER_DEVICE}} --embedding-dim 1 \
 --initial-loss-scale 4096 \
 --total-steps 200000 --warmup-steps 100 --train-warmup-steps 0 \
 --stop-steps 200001 \
 --checkpoint-steps 10000 \
---lr 1e-5 --seq-length 8192 --batch-size 4 --micro-batch-size 4 --gradient-accumulate-step 16 \
+--lr 1e-5 --seq-length 8192 --batch-size 4 --micro-batch-size 4 --gradient-accumulate-step 4 \
 --dist-url tcp://${master_ip}:8956 \
 --world-size $(({{PP_DEGREE}}*{{DP_DEGREE}})) --pipeline-group-size {{PP_DEGREE}} --data-group-size {{DP_DEGREE}} \
 --job-id {{JOB_ID}} --net-interface ${netif} \
