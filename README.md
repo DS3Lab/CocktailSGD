@@ -7,6 +7,7 @@
 - Install PyTorch env: 
 
 ```shell
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
 conda create -n cocktail python=3.10
 conda activate cocktail
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
@@ -15,6 +16,7 @@ conda install -c conda-forge cupy nccl cudatoolkit=11.8
 
 or managing packages with `mamba`:
 ```shell
+mamba install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
 mamba create -n cocktail python=3.10
 mamba activate cocktail
 mamba install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
