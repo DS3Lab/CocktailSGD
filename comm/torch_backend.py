@@ -40,7 +40,7 @@ class TorchCommunicator:
         else:
             buffer = tensor.cpu()
             dist.recv(buffer, self.to_global_rank(src), group=self.process_group)
-            tensor[:] = buffer.to(tensor.device)
+            tensor.set_(buffer.to(tensor.device))
     
     def isend(self,
              tensor: torch.Tensor,
@@ -63,7 +63,7 @@ class TorchCommunicator:
             assert False
             buffer = tensor.cpu()
             handler = dist.irecv(buffer, self.to_global_rank(src), group=self.process_group)
-            tensor[:] = buffer.to(tensor.device)
+            tensor.set_(buffer.to(tensor.device))
         return handler
 
     def broadcast(self,
@@ -75,7 +75,7 @@ class TorchCommunicator:
         else:
             buffer = tensor.cpu()
             dist.broadcast(buffer, self.to_global_rank(src), group=self.process_group)
-            tensor[:] = buffer.to(tensor.device)
+            tensor.set_(buffer.to(tensor.device))
 
     def reduce(self,
                tensor: torch.Tensor,
@@ -90,7 +90,7 @@ class TorchCommunicator:
                    op=dist.ReduceOp.SUM):
         buffer = tensor.cpu()
         dist.all_reduce(buffer, group=self.process_group, op=op)
-        tensor[:] = buffer.to(tensor.device)
+        tensor.set_(buffer.to(tensor.device))
 
     def gather(self,
                tensor: torch.Tensor,

@@ -62,6 +62,9 @@ def _multi_tensor_copy_this_to_that(this, that):
 class Fp16Optimizer:
     # If offload is set to true, the fp32 copy is stored on CPU.
     def __init__(self, optimizer, grad_scaler, device, offload=False):
+        
+        print('WARN: THIS IMPL IS DEPRECATED! AND WILL BE REMOVED SOON!')
+        
         self.offload = offload
         if self.offload:
             self.cpu_to_gpu_stream = torch.cuda.Stream(device=device, priority=-1)

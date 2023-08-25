@@ -53,7 +53,7 @@ class CocktailSGDDP:
         
         if self.flatten:
             _params = []
-            for i_group, group in enumerate(self.optimizer.optimizer.param_groups):
+            for i_group, group in enumerate(self.optimizer.param_groups):
                 for i_para, para in enumerate(group["params"]):
                     _params.append(para)
             self.flatten_para = flatten_tensors(_params)
@@ -346,7 +346,7 @@ class CocktailSGDDP:
             cupy_dp_stream = cupy.cuda.ExternalStream(self.dp_comm_stream.cuda_stream)
             with torch.cuda.stream(self.dp_comm_stream), cupy_dp_stream:
                 
-                for i_group, group in enumerate(self.optimizer.optimizer.param_groups):
+                for i_group, group in enumerate(self.optimizer.param_groups):
                     for i_para, para in enumerate(group["params"]):
                         
                         
